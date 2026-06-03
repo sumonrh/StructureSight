@@ -11,12 +11,37 @@ export default function ApiKeySettings({ config, onChange }: ApiKeySettingsProps
   const [showKey, setShowKey] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
 
+  // Supported models map with IDs and human labels
+  const modelsMap: Record<AiProvider, { label: string; id: string }[]> = {
+    gemini: [
+      { label: 'Gemini 3.5 Flash', id: 'gemini-3.5-flash' },
+      { label: 'Gemini 3.1 Pro Preview', id: 'gemini-3.1-pro-preview' },
+      { label: 'Gemini 3.1 Flash-Lite', id: 'gemini-3.1-flash-lite' },
+    ],
+    openai: [
+      { label: 'GPT-5.5 (Flagship)', id: 'gpt-5.5' },
+      { label: 'GPT-5.4 Mini', id: 'gpt-5.4-mini' },
+      { label: 'GPT-4o', id: 'gpt-4o' },
+    ],
+    anthropic: [
+      { label: 'Claude 4.8 Opus', id: 'claude-4.8-opus' },
+      { label: 'Claude 4.6 Sonnet', id: 'claude-4.6-sonnet' },
+      { label: 'Claude 4.5 Haiku', id: 'claude-4.5-haiku' },
+      { label: 'Claude 3.5 Sonnet', id: 'claude-3-5-sonnet-latest' },
+    ],
+    grok: [
+      { label: 'Grok 4.3 Agentic', id: 'grok-4.3' },
+      { label: 'Grok 4.20 Flagship', id: 'grok-4.20' },
+      { label: 'Grok 2 Vision', id: 'grok-2-vision-1212' },
+    ]
+  };
+
   // Suggested model names based on selected provider
   const placeholderModels: Record<AiProvider, string> = {
     gemini: 'gemini-3.5-flash',
-    openai: 'gpt-4o',
-    anthropic: 'claude-3-5-sonnet-latest',
-    grok: 'grok-2-vision-1212'
+    openai: 'gpt-5.5',
+    anthropic: 'claude-4.8-opus',
+    grok: 'grok-4.3'
   };
 
   const handleProviderChange = (provider: AiProvider) => {
@@ -95,17 +120,21 @@ export default function ApiKeySettings({ config, onChange }: ApiKeySettingsProps
 
         {/* Model Input */}
         <div>
-          <label className="block text-[10px] font-bold text-slate-400 dark:text-tokyo-comment uppercase tracking-wider mb-1.5" htmlFor="model-name-input">
+          <label className="block text-[10px] font-bold text-slate-400 dark:text-tokyo-comment uppercase tracking-wider mb-1.5" htmlFor="model-name-select">
             Model Specifier
           </label>
-          <input
-            id="model-name-input"
-            type="text"
-            className="w-full bg-slate-50 dark:bg-tokyo-input border border-slate-200 dark:border-tokyo-border rounded px-3 py-2 text-xs font-mono text-slate-800 dark:text-tokyo-text outline-none focus:border-blue-500 dark:focus:border-tokyo-blue focus:ring-1 focus:ring-blue-500 dark:focus:ring-tokyo-blue transition-all"
+          <select
+            id="model-name-select"
+            className="w-full bg-slate-50 dark:bg-tokyo-input border border-slate-200 dark:border-tokyo-border rounded px-3 py-2 text-xs font-mono text-slate-800 dark:text-tokyo-text outline-none focus:border-blue-500 dark:focus:border-tokyo-blue focus:ring-1 focus:ring-blue-500 dark:focus:ring-tokyo-blue transition-all cursor-pointer"
             value={config.modelName}
             onChange={(e) => handleModelNameChange(e.target.value)}
-            placeholder={placeholderModels[config.provider]}
-          />
+          >
+            {modelsMap[config.provider].map((m) => (
+              <option key={m.id} value={m.id} className="bg-white dark:bg-tokyo-panel text-slate-800 dark:text-tokyo-text">
+                {m.label} ({m.id})
+              </option>
+            ))}
+          </select>
         </div>
 
         {/* Config / Custom API Key Input if needed */}
