@@ -3,12 +3,14 @@ import path from "path";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
 import dotenv from "dotenv";
+import { onRequest } from "firebase-functions/v2/https";
 
 dotenv.config();
 
-async function startServer() {
+const PORT = process.env.PORT || 3000;
+
+async function getApp() {
   const app = express();
-  const PORT = 3000;
 
   // Max out standard sizes since blueprints can be high resolution base64
   app.use(express.json({ limit: "50mb" }));
@@ -476,9 +478,32 @@ Be highly accurate, constructive, mathematically precise, and safety-focused. Ci
     });
   }
 
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server starting on port ${PORT}`);
-  });
+  return app;
 }
 
-startServer();
+let appInstance: any = null;
+async function getAppInstance() {
+  if (!appInstance) {
+    appInstance = await getApp();
+  }
+  return appInstance;
+}
+
+// Export the Cloud Function API handler
+export const api = onRequest({
+  cors: true,
+  memory: "1GiB",
+  timeoutSeconds: 300,
+}, async (req, res) => {
+  const app = await getAppInstance();
+  app(req, res);
+});
+
+// Run standalone server if not deployed as a Firebase Cloud Function
+if (!process.env.FIREBASE_CONFIG || process.env.FUNCTIONS_EMULATOR) {
+  getAppInstance().then((app) => {
+    app.listen(PORT, "0.0.0.0", () => {
+      console.log(`Server starting on port ${PORT}`);
+    });
+  });
+}
