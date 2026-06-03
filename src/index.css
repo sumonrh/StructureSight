@@ -1,0 +1,48 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;600;700&display=swap');
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Space Grotesk", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+
+  /* Tokyo Night Color Palette */
+  --color-tokyo-bg: #16161e;
+  --color-tokyo-card: #1a1b26;
+  --color-tokyo-panel: #1f2335;
+  --color-tokyo-input: #24283b;
+  --color-tokyo-text: #c0caf5;
+  --color-tokyo-muted: #a9b1d6;
+  --color-tokyo-comment: #565f89;
+  --color-tokyo-border: #292e42;
+  --color-tokyo-border-light: #3b4261;
+
+  --color-tokyo-blue: #7aa2f7;
+  --color-tokyo-cyan: #7dcfff;
+  --color-tokyo-green: #9ece6a;
+  --color-tokyo-yellow: #e0af68;
+  --color-tokyo-red: #f7768e;
+  --color-tokyo-purple: #bb9af7;
+  --color-tokyo-orange: #ff9e64;
+}
+
+/* Custom styling for sleek light-themed structural layout blueprint grid */
+.blueprint-grid {
+  background-image: 
+    linear-gradient(rgba(148, 163, 184, 0.1) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(148, 163, 184, 0.1) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+/* Custom styling for sleek dark-themed structural layout blueprint grid in Tokyo Night */
+.blueprint-grid-dark {
+  background-image: 
+    linear-gradient(rgba(122, 162, 247, 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(122, 162, 247, 0.06) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+
+

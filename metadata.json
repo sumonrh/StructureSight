@@ -1,0 +1,6 @@
+{
+  "name": "StructureSight",
+  "description": "Secure, private dashboard for uploading structural drawings, extracting text, rendering PDF pages to images, and performing expert AI structural engineering evaluations.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
