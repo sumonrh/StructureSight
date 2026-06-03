@@ -16,7 +16,8 @@ export default function ApiKeySettings({ config, onChange }: ApiKeySettingsProps
     gemini: [
       { label: 'Gemini 3.5 Flash', id: 'gemini-3.5-flash' },
       { label: 'Gemini 3.1 Pro Preview', id: 'gemini-3.1-pro-preview' },
-      { label: 'Gemini 3.1 Flash-Lite', id: 'gemini-3.1-flash-lite' },
+      { label: 'Gemini 3.1 Flash Lite', id: 'gemini-3.1-flash-lite' },
+      { label: 'Gemini 3.0 Flash', id: 'gemini-3.0-flash' },
     ],
     openai: [
       { label: 'GPT-5.5 (Flagship)', id: 'gpt-5.5' },
@@ -111,7 +112,7 @@ export default function ApiKeySettings({ config, onChange }: ApiKeySettingsProps
                       : 'bg-slate-50 dark:bg-tokyo-input border-slate-200 dark:border-tokyo-border hover:bg-slate-100 dark:hover:bg-tokyo-card text-slate-600 dark:text-tokyo-muted'
                   }`}
                 >
-                  {p === 'gemini' ? 'Gemini 3.5 (Default)' : p}
+                  {p === 'gemini' ? 'Gemini' : p}
                 </button>
               );
             })}
