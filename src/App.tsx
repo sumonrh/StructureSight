@@ -21,7 +21,8 @@ import {
   ExternalLink,
   Layers,
   Sun,
-  Moon
+  Moon,
+  LogOut
 } from 'lucide-react';
 import { renderPdfPagesToImages, extractPdfText, renderPdfPageToImage, renderPdfPageToPdfBytes } from './utils/pdfRenderer';
 import { generateZipForExport } from './utils/zipper';
@@ -31,11 +32,34 @@ import DrawingsChecklist from './components/DrawingsChecklist';
 import BlueprintViewer from './components/BlueprintViewer';
 import AnalysisReport from './components/AnalysisReport';
 import EngineeringChat from './components/EngineeringChat';
+import Login from './components/Login';
+import { onAuthStateChanged, signOut, User as FirebaseUser } from 'firebase/auth';
+import { auth } from './utils/firebase';
 import { encryptWithPublicKey } from './utils/crypto';
 
 const initialChecklist: DrawingChecklistItem[] = [];
 
 export default function App() {
+  // Auth state
+  const [user, setUser] = useState<FirebaseUser | null>(null);
+  const [authLoading, setAuthLoading] = useState<boolean>(true);
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      setUser(currentUser);
+      setAuthLoading(false);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  const handleSignOut = async () => {
+    try {
+      await signOut(auth);
+    } catch (err) {
+      console.error("Sign out error:", err);
+    }
+  };
+
   // Theme state
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
     const saved = localStorage.getItem('theme');
@@ -162,15 +186,27 @@ export default function App() {
   const [publicKey, setPublicKey] = useState<string>('');
 
   useEffect(() => {
-    fetch('/api/public-key')
-      .then(res => res.json())
-      .then(data => {
+    if (!user) return;
+    
+    const fetchPublicKey = async () => {
+      try {
+        const token = await user.getIdToken();
+        const res = await fetch('/api/public-key', {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+        const data = await res.json();
         if (data.publicKey) {
           setPublicKey(data.publicKey);
         }
-      })
-      .catch(err => console.error("Failed to fetch secure tunnel public key:", err));
-  }, []);
+      } catch (err) {
+        console.error("Failed to fetch secure tunnel public key:", err);
+      }
+    };
+
+    fetchPublicKey();
+  }, [user]);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const requirementsInputRef = useRef<HTMLInputElement>(null);
@@ -347,10 +383,16 @@ export default function App() {
         truncatedText = truncatedText.substring(0, 25000) + '\n\n... [Truncated due to token limit] ...';
       }
 
+      let token = '';
+      if (user) {
+        token = await user.getIdToken();
+      }
+
       const response = await fetch('/api/generate-checklist', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
         },
         signal: controller.signal,
         body: JSON.stringify({
@@ -466,10 +508,16 @@ export default function App() {
         }
       }
 
+      let token = '';
+      if (user) {
+        token = await user.getIdToken();
+      }
+
       const response = await fetch('/api/analyze', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
         },
         signal: controller.signal,
         body: JSON.stringify({
@@ -560,10 +608,16 @@ export default function App() {
           activePrompt += "\n\nNote: The standard requirements/specs document was not found, so please perform the review based on general engineering design check principles.";
         }
 
+        let token = '';
+        if (user) {
+          token = await user.getIdToken();
+        }
+
         const response = await fetch('/api/analyze', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
+            ...(token ? { 'Authorization': `Bearer ${token}` } : {})
           },
           signal: controller.signal,
           body: JSON.stringify({
@@ -752,6 +806,24 @@ export default function App() {
   const currentActivePageImage = uploadedFile ? uploadedFile.pages[currentPageIndex] : null;
   const currentActiveResult = currentActivePageImage ? aiResults[currentActivePageImage.pageNumber] : null;
 
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center space-y-4 font-sans text-white">
+        <div className="p-4 bg-blue-500/10 border border-blue-500/30 rounded-2xl text-blue-400 animate-pulse">
+          <ShieldCheck className="h-10 w-10" />
+        </div>
+        <div className="flex items-center gap-2 text-xs font-mono text-slate-400">
+          <div className="h-3 w-3 border-2 border-blue-400 border-t-transparent rounded-full animate-spin"></div>
+          <span>Verifying credentials...</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <Login />;
+  }
+
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-tokyo-bg text-slate-900 dark:text-tokyo-text flex flex-col font-sans transition-colors duration-150" id="structuresight-dashboard">
       
@@ -780,7 +852,9 @@ export default function App() {
           
           <div className="hidden sm:flex text-slate-300 dark:text-tokyo-muted font-mono items-center gap-1.5 border border-slate-700 dark:border-tokyo-border px-3 py-1 rounded">
             <User className="h-3.5 w-3.5 text-slate-400 dark:text-tokyo-muted" />
-            <span className="truncate max-w-[150px]" title="rafiqulhaque25@gmail.com">rafiqulhaque25West</span>
+            <span className="truncate max-w-[150px]" title={user.email || ""}>
+              {user.displayName || user.email || "Engineer"}
+            </span>
           </div>
 
           {/* Theme Toggle Button */}
@@ -796,7 +870,27 @@ export default function App() {
             )}
           </button>
 
-          <div className="w-8 h-8 bg-slate-700 dark:bg-tokyo-input rounded-full flex items-center justify-center text-xs border border-slate-600 dark:border-tokyo-border font-semibold text-white">JD</div>
+          {user.photoURL ? (
+            <img
+              src={user.photoURL}
+              alt={user.displayName || "Avatar"}
+              className="w-8 h-8 rounded-full border border-slate-600 dark:border-tokyo-border object-cover"
+              referrerPolicy="no-referrer"
+            />
+          ) : (
+            <div className="w-8 h-8 bg-slate-700 dark:bg-tokyo-input rounded-full flex items-center justify-center text-xs border border-slate-600 dark:border-tokyo-border font-semibold text-white">
+              {user.displayName ? user.displayName.substring(0, 2).toUpperCase() : (user.email ? user.email.substring(0, 2).toUpperCase() : 'US')}
+            </div>
+          )}
+
+          {/* Sign Out Button */}
+          <button
+            onClick={handleSignOut}
+            className="p-1.5 rounded-md bg-slate-800 dark:bg-tokyo-input text-slate-300 dark:text-tokyo-muted hover:text-red-400 dark:hover:text-tokyo-red border border-slate-700 dark:border-tokyo-border hover:bg-slate-700 dark:hover:bg-tokyo-panel transition-colors cursor-pointer flex items-center justify-center"
+            title="Sign Out"
+          >
+            <LogOut className="h-4 w-4" />
+          </button>
         </div>
       </header>
 

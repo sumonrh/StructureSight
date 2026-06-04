@@ -5,8 +5,39 @@ import { GoogleGenAI } from "@google/genai";
 import dotenv from "dotenv";
 import { onRequest } from "firebase-functions/v2/https";
 import crypto from "crypto";
+import * as admin from "firebase-admin";
 
 dotenv.config();
+
+// Initialize Firebase Admin SDK
+let isAuthInitialized = false;
+try {
+  admin.initializeApp();
+  isAuthInitialized = true;
+} catch (e) {
+  console.warn("Firebase Admin failed to initialize. Server-side auth verification will fallback to mock mode or bypass during local development:", e);
+}
+
+// Authentication Middleware
+const checkAuth = async (req: express.Request, res: express.Response, next: express.NextFunction) => {
+  if (!isAuthInitialized || process.env.NODE_ENV !== "production") {
+    return next();
+  }
+  
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return res.status(401).json({ error: "Unauthorized: Missing auth token" });
+  }
+  const token = authHeader.split("Bearer ")[1];
+  try {
+    const decodedToken = await admin.auth().verifyIdToken(token);
+    (req as any).user = decodedToken;
+    next();
+  } catch (err) {
+    console.error("Token verification failed:", err);
+    return res.status(401).json({ error: "Unauthorized: Invalid auth token" });
+  }
+};
 
 // Generate ephemeral RSA-2048 key pair on startup for secure API key transit
 const { publicKey, privateKey } = crypto.generateKeyPairSync("rsa", {
@@ -79,12 +110,12 @@ async function getApp() {
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
 
   // Public key endpoint for secure API key client transit
-  app.get("/api/public-key", (req, res) => {
+  app.get("/api/public-key", checkAuth, (req, res) => {
     res.json({ publicKey });
   });
 
   // AI Drawing Review API Endpoint
-  app.post("/api/analyze", async (req: express.Request, res: express.Response) => {
+  app.post("/api/analyze", checkAuth, async (req: express.Request, res: express.Response) => {
     try {
       const { image, provider, apiKey: rawApiKey, model, customPrompt, drawingText, requirementsText, checklist } = req.body;
       const apiKey = decryptApiKey(rawApiKey);
@@ -303,7 +334,7 @@ Adopt a highly professional, authoritative, objective, and deeply constructive t
   });
 
   // AI Interactive Engineering Chat Endpoint
-  app.post("/api/chat", async (req: express.Request, res: express.Response) => {
+  app.post("/api/chat", checkAuth, async (req: express.Request, res: express.Response) => {
     try {
       const { 
         image, 
@@ -540,7 +571,7 @@ Be highly accurate, constructive, mathematically precise, and safety-focused. Ci
   });
 
   // AI Checklist Generation Endpoint based on reference standards PDF
-  app.post("/api/generate-checklist", async (req: express.Request, res: express.Response) => {
+  app.post("/api/generate-checklist", checkAuth, async (req: express.Request, res: express.Response) => {
     try {
       const { provider, apiKey: rawApiKey, model, requirementsText } = req.body;
       const apiKey = decryptApiKey(rawApiKey);

@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { ChatMessage, PdfPageImage, PDFRequirementsFile, AiModelConfig, PDFDrawingFile } from '../types';
 import { encryptWithPublicKey } from '../utils/crypto';
+import { auth } from '../utils/firebase';
 
 interface EngineeringChatProps {
   pageImage: PdfPageImage | null;
@@ -104,10 +105,16 @@ export default function EngineeringChat({
         drawingText = pageImage.extractedText || '';
       }
 
+      let token = '';
+      if (auth.currentUser) {
+        token = await auth.currentUser.getIdToken();
+      }
+
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
         },
         signal: controller.signal,
         body: JSON.stringify({
