@@ -1,6 +1,6 @@
 import React from 'react';
 import ReactMarkdown from 'react-markdown';
-import { Copy, Download, Sparkles, HelpCircle, FileText, CheckCircle2, ChevronRight, AlertTriangle } from 'lucide-react';
+import { Copy, Download, Sparkles, HelpCircle, FileText, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { AnalysisResult } from '../types';
 
 interface AnalysisReportProps {
@@ -20,30 +20,6 @@ export default function AnalysisReport({
   totalPageCount,
   drawingName,
 }: AnalysisReportProps) {
-
-  // Quick evaluation options for structural drawings
-  const quickPrompts = [
-    {
-      title: "Bridge Steel Truss Audit",
-      description: "Analyze the panel connections, welds, and gusset details for load distribution stresses.",
-      prompt: "Review this bridge truss drawing sheet as a veteran bridge engineer. Analyze the steel panel connection welds, bolt schedules, and gusset plate dimensions. Identify load transfer eccentricities, progressive collapse single-point vulnerabilities, and propose connection security improvements."
-    },
-    {
-      title: "Concrete Rebar Detailing",
-      description: "Verify lap splice lengths, beam-column flexural confinement steel, and ACI spacing limits.",
-      prompt: "Perform a structural concrete review under ACI 318 rules. Inspect the rebar detailing schedules, spacing, anchorage embedment lengths, and flexural shear stirrups. Verify confinement steel density in the beam-column node joint, identifying risk of anchorage shear cracks or brittle failure."
-    },
-    {
-      title: "Foundation & pile layout",
-      description: "Assess column footings, pile caps, tie-beams, and deep boring bearing capacity constraints.",
-      prompt: "Execute an independent review of this foundation drawing page. Inspect the spread column footprint, pile capping grids, grade beams, and waterproofing details. Review the design loads for bending stresses, soil shearing, and propose foundation settlement or liquefaction safety improvements."
-    },
-    {
-      title: "Shear Wall / Lateral Forces",
-      description: "Verify lateral wind and seismic shearing paths, thickness schedules, and boundary elements.",
-      prompt: "Review this structural shear wall detailing sheet for ASCE 7 seismic and wind compatibility. Analyze boundaries, rebar configurations, boundary element columns, and continuous path integrity. Propose improvements to counteract seismic torsional shear or wind-induced moments."
-    }
-  ];
 
   const copyToClipboard = () => {
     if (!currentResult) return;
@@ -155,43 +131,12 @@ Review Category:     Independent Lead Structural Engineer Audit
             </span>
             <div className="space-y-1 px-4">
               <h4 className="font-display font-semibold text-sm text-slate-800 dark:text-tokyo-text">No Review Done for This Sheet</h4>
-              <p className="text-xs text-slate-500 dark:text-tokyo-muted max-w-sm mx-auto leading-normal font-sans">
-                Click "Verify Design & Run Structural AI" below, or choose a specialized reviewing macro to evaluate rebar joins, truss connections, or bearing notes.
+              <p className="text-xs text-slate-550 dark:text-tokyo-muted max-w-sm mx-auto leading-normal font-sans">
+                Click "Verify Design & Run Structural AI" below to evaluate rebar joins, truss connections, or bearing notes.
               </p>
             </div>
           </div>
         )}
-
-        {/* Specialized Engineering macros */}
-        <div className="border-t border-slate-100 dark:border-tokyo-border pt-4 mt-6">
-          <div className="flex items-center gap-1.5 mb-3">
-            <Sparkles className="h-4 w-4 text-blue-600 dark:text-tokyo-blue" />
-            <h4 className="text-xs uppercase tracking-wider font-bold text-slate-600 dark:text-tokyo-comment font-mono">
-              Specialized Drawing Review Macros
-            </h4>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
-            {quickPrompts.map((macro, idx) => (
-              <button
-                key={idx}
-                type="button"
-                onClick={() => onRunAnalysis(macro.prompt)}
-                disabled={isLoading}
-                className="group flex flex-col text-left p-3 rounded bg-slate-50 dark:bg-tokyo-input hover:bg-slate-100 dark:hover:bg-tokyo-card border border-slate-200 dark:border-tokyo-border hover:border-blue-500/50 dark:hover:border-tokyo-blue/50 transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
-              >
-                <div className="flex items-center justify-between w-full mb-1">
-                  <span className="text-xs font-semibold text-blue-600 dark:text-tokyo-blue font-display group-hover:text-blue-750 dark:group-hover:text-tokyo-cyan transition-colors font-sans font-semibold">
-                    {macro.title}
-                  </span>
-                  <ChevronRight className="h-3 w-3 text-slate-400 dark:text-tokyo-muted group-hover:text-blue-600 dark:group-hover:text-tokyo-blue group-hover:translate-x-0.5 transition-all" />
-                </div>
-                <p className="text-[10px] text-slate-550 dark:text-tokyo-muted leading-snug group-hover:text-slate-650 dark:group-hover:text-tokyo-text transition-colors font-sans">
-                  {macro.description}
-                </p>
-              </button>
-            ))}
-          </div>
-        </div>
       </div>
     </div>
   );

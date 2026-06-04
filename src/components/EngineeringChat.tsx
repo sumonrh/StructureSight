@@ -12,17 +12,20 @@ import {
   Construction
 } from 'lucide-react';
 import { ChatMessage, PdfPageImage, PDFRequirementsFile, AiModelConfig } from '../types';
+import { encryptWithPublicKey } from '../utils/crypto';
 
 interface EngineeringChatProps {
   pageImage: PdfPageImage | null;
   uploadedRequirements: PDFRequirementsFile | null;
   aiConfig: AiModelConfig;
+  publicKey?: string;
 }
 
 export default function EngineeringChat({
   pageImage,
   uploadedRequirements,
   aiConfig,
+  publicKey,
 }: EngineeringChatProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState<string>('');
@@ -60,6 +63,15 @@ export default function EngineeringChat({
     setIsSending(true);
 
     try {
+      let securedApiKey = aiConfig.customKey || '';
+      if (securedApiKey && publicKey) {
+        try {
+          securedApiKey = await encryptWithPublicKey(publicKey, securedApiKey);
+        } catch (err) {
+          console.warn("Client encryption failed, falling back to secure channel transit:", err);
+        }
+      }
+
       let requirementsText = '';
       if (uploadedRequirements) {
         requirementsText = uploadedRequirements.pagesText
@@ -85,7 +97,7 @@ export default function EngineeringChat({
         body: JSON.stringify({
           image: pageImage?.base64 || null,
           provider: aiConfig.provider,
-          apiKey: aiConfig.customKey,
+          apiKey: securedApiKey,
           model: aiConfig.modelName,
           message: textToSend,
           history: historyPayload,

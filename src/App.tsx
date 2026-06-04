@@ -29,17 +29,9 @@ import DrawingsChecklist from './components/DrawingsChecklist';
 import BlueprintViewer from './components/BlueprintViewer';
 import AnalysisReport from './components/AnalysisReport';
 import EngineeringChat from './components/EngineeringChat';
+import { encryptWithPublicKey } from './utils/crypto';
 
-const initialChecklist: DrawingChecklistItem[] = [
-  { id: 'sc1', label: 'Verify continuous, direct load pathway from foundations to headers', checked: false, category: 'safety' },
-  { id: 'sc2', label: 'Monitor shear-moment stress configurations and redundant truss cross-links', checked: false, category: 'safety' },
-  { id: 'sc3', label: 'Evaluate structural vulnerabilities under critical earthquake/lateral gusts', checked: false, category: 'safety' },
-  { id: 'sc4', label: 'Perform beam-column joints reinforcement tie audits under AC-318 spacing limits', checked: false, category: 'detailing' },
-  { id: 'sc5', label: 'Audit connection lap splice tension anchorage embedment specs', checked: false, category: 'detailing' },
-  { id: 'sc6', label: 'Inspect welded structural steel gusset sizing and splice plates details', checked: false, category: 'detailing' },
-  { id: 'sc7', label: 'Confirm design calculations refer to IBC standards and AISC 360 guides', checked: false, category: 'compliance' },
-  { id: 'sc8', label: 'Assert concrete (f\'c = 4000psi) and steel grades (A572 Gr. 50) labels on note lists', checked: false, category: 'materials' },
-];
+const initialChecklist: DrawingChecklistItem[] = [];
 
 export default function App() {
   // Theme state
@@ -88,6 +80,7 @@ export default function App() {
 
   // Checklist state
   const [checklist, setChecklist] = useState<DrawingChecklistItem[]>(initialChecklist);
+  const [isGeneratingChecklist, setIsGeneratingChecklist] = useState<boolean>(false);
 
   // AI review reports cache: pageNumber -> AnalysisResult
   const [aiResults, setAiResults] = useState<Record<number, AnalysisResult>>({});
@@ -101,6 +94,19 @@ export default function App() {
 
   // Custom prompting state
   const [customPrompt, setCustomPrompt] = useState<string>('');
+
+  const [publicKey, setPublicKey] = useState<string>('');
+
+  useEffect(() => {
+    fetch('/api/public-key')
+      .then(res => res.json())
+      .then(data => {
+        if (data.publicKey) {
+          setPublicKey(data.publicKey);
+        }
+      })
+      .catch(err => console.error("Failed to fetch secure tunnel public key:", err));
+  }, []);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const requirementsInputRef = useRef<HTMLInputElement>(null);
@@ -196,6 +202,12 @@ export default function App() {
         pagesText,
       });
 
+      // Automatically generate checklist from reference standards text
+      const requirementsText = pagesText
+        .map(p => `[Page ${p.pageNumber}]\n${p.text}`)
+        .join('\n\n');
+      generateChecklist(requirementsText);
+
     } catch (err: any) {
       console.error(err);
       setApiError(err.message || 'An error occurred while parsing the standards document.');
@@ -204,6 +216,59 @@ export default function App() {
       if (requirementsInputRef.current) {
         requirementsInputRef.current.value = '';
       }
+    }
+  };
+
+  const generateChecklist = async (requirementsText: string) => {
+    try {
+      setIsGeneratingChecklist(true);
+      setApiError(null);
+
+      let securedApiKey = aiConfig.customKey || '';
+      if (securedApiKey && publicKey) {
+        try {
+          securedApiKey = await encryptWithPublicKey(publicKey, securedApiKey);
+        } catch (err) {
+          console.warn("Client encryption failed, falling back to secure channel transit:", err);
+        }
+      }
+
+      // Truncate requirements text to avoid hitting model context limits
+      let truncatedText = requirementsText;
+      if (truncatedText.length > 25000) {
+        truncatedText = truncatedText.substring(0, 25000) + '\n\n... [Truncated due to token limit] ...';
+      }
+
+      const response = await fetch('/api/generate-checklist', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          provider: aiConfig.provider,
+          apiKey: securedApiKey,
+          model: aiConfig.modelName,
+          requirementsText: truncatedText,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Server error while generating checklist.');
+      }
+
+      if (Array.isArray(data.checklist)) {
+        setChecklist(data.checklist);
+      } else {
+        throw new Error('Checklist returned is not a valid list of items.');
+      }
+
+    } catch (err: any) {
+      console.error(err);
+      setApiError('Failed to generate checklist from standards: ' + err.message);
+    } finally {
+      setIsGeneratingChecklist(false);
     }
   };
 
@@ -261,6 +326,15 @@ export default function App() {
     const activePrompt = specificPrompt || customPrompt;
 
     try {
+      let securedApiKey = aiConfig.customKey || '';
+      if (securedApiKey && publicKey) {
+        try {
+          securedApiKey = await encryptWithPublicKey(publicKey, securedApiKey);
+        } catch (err) {
+          console.warn("Client encryption failed, falling back to secure channel transit:", err);
+        }
+      }
+
       // Gather and truncate requirements text safely for prompt context optimization
       let requirementsText = '';
       if (uploadedRequirements) {
@@ -281,7 +355,7 @@ export default function App() {
         body: JSON.stringify({
           image: activePage.base64,
           provider: aiConfig.provider,
-          apiKey: aiConfig.customKey,
+          apiKey: securedApiKey,
           model: aiConfig.modelName,
           customPrompt: activePrompt,
           drawingText: activePage.extractedText || '',
@@ -498,7 +572,7 @@ export default function App() {
               onDragLeave={handleDragLeave}
               onDrop={handleDrop}
               onClick={triggerFileInput}
-              className={`border-2 border-dashed rounded-lg p-5 text-center transition-all cursor-pointer ${
+              className={`border-2 border-dashed rounded-lg h-28 flex flex-col items-center justify-center text-center transition-all cursor-pointer ${
                 isDragging
                   ? 'border-blue-500 dark:border-tokyo-blue bg-blue-50/50 dark:bg-tokyo-blue/10'
                   : 'border-slate-200 dark:border-tokyo-border bg-slate-550 dark:bg-tokyo-input hover:bg-slate-100 dark:hover:bg-tokyo-card hover:border-slate-300 dark:hover:border-tokyo-border-light'
@@ -642,10 +716,10 @@ export default function App() {
               onDragLeave={handleRequirementsDragLeave}
               onDrop={handleRequirementsDrop}
               onClick={triggerRequirementsInput}
-              className={`border-2 border-dashed rounded-lg p-5 text-center transition-all cursor-pointer ${
+              className={`border-2 border-dashed rounded-lg h-28 flex flex-col items-center justify-center text-center transition-all cursor-pointer ${
                 isDraggingRequirements
                   ? 'border-blue-500 dark:border-tokyo-blue bg-blue-50/50 dark:bg-tokyo-blue/10'
-                  : 'border-slate-200 dark:border-tokyo-border bg-slate-50 dark:bg-tokyo-input hover:bg-slate-100 dark:hover:bg-tokyo-card hover:border-slate-300 dark:hover:border-tokyo-border-light'
+                  : 'border-slate-200 dark:border-tokyo-border bg-slate-550 dark:bg-tokyo-input hover:bg-slate-100 dark:hover:bg-tokyo-card hover:border-slate-300 dark:hover:border-tokyo-border-light'
               }`}
               id="requirements-drop-zone"
             >
@@ -660,7 +734,6 @@ export default function App() {
               <UploadCloud className="h-8 w-8 text-blue-500 dark:text-tokyo-blue mx-auto mb-2" />
               <div className="space-y-1">
                 <p className="text-xs font-semibold text-slate-700 dark:text-tokyo-text">Standards & Requirements PDF</p>
-                <p className="text-[10px] text-slate-400 dark:text-tokyo-muted font-mono">Upload ACI / AISC specs or project criteria</p>
               </div>
             </div>
 
@@ -697,7 +770,10 @@ export default function App() {
                     </div>
                   </div>
                   <button
-                    onClick={() => setUploadedRequirements(null)}
+                    onClick={() => {
+                      setUploadedRequirements(null);
+                      setChecklist([]);
+                    }}
                     className="text-slate-400 dark:text-tokyo-muted hover:text-red-500 dark:hover:text-tokyo-red transition-colors py-1 px-1.5 rounded cursor-pointer"
                     title="Remove requirements reference"
                   >
@@ -802,15 +878,15 @@ export default function App() {
             items={checklist}
             onToggle={handleChecklistToggle}
             onReset={handleChecklistReset}
+            isLoading={isGeneratingChecklist}
           />
-
-         </section>
+        </section>
 
         {/* Center / Right Drafting Floor Workspace */}
-        <section className="flex-1 bg-slate-100 dark:bg-tokyo-bg p-6 overflow-y-auto flex flex-col lg:grid lg:grid-cols-2 gap-6 min-h-0 transition-colors duration-150">
+        <section className="flex-1 bg-slate-100 dark:bg-tokyo-bg p-6 overflow-y-auto flex flex-col lg:grid lg:grid-cols-3 gap-6 min-h-0 transition-colors duration-150">
           
-          {/* Column A: HD Page drawing stage viewer */}
-          <div className="flex flex-col space-y-4">
+          {/* Column A & B: HD Page drawing stage viewer & Chat co-pilot (stacked) */}
+          <div className="flex flex-col space-y-6 lg:col-span-2">
             
             {/* API Exception Error Notice Bar */}
             {apiError && (
@@ -823,7 +899,7 @@ export default function App() {
               </div>
             )}
 
-            <div className="flex-1">
+            <div>
               <BlueprintViewer
                 pageImage={currentActivePageImage}
                 isSelectedInZip={currentActivePageImage ? zipSelectedPages.has(currentActivePageImage.pageNumber) : false}
@@ -874,10 +950,17 @@ export default function App() {
                 </button>
               </div>
             )}
+
+            <EngineeringChat
+              pageImage={currentActivePageImage}
+              uploadedRequirements={uploadedRequirements}
+              aiConfig={aiConfig}
+              publicKey={publicKey}
+            />
           </div>
 
-          {/* Column B: Lead Structural Engineering AI Report Panel & Interactive Chat */}
-          <div className="flex flex-col space-y-6">
+          {/* Column C: Lead Structural Engineering Review */}
+          <div className="flex flex-col lg:col-span-1">
             <AnalysisReport
               currentResult={currentActiveResult}
               isLoading={isAnalyzing}
@@ -885,12 +968,6 @@ export default function App() {
               currentPageNumber={uploadedFile ? currentPageIndex + 1 : 0}
               totalPageCount={uploadedFile ? uploadedFile.totalPages : 0}
               drawingName={uploadedFile ? uploadedFile.name : 'Unknown Drawing'}
-            />
-
-            <EngineeringChat
-              pageImage={currentActivePageImage}
-              uploadedRequirements={uploadedRequirements}
-              aiConfig={aiConfig}
             />
           </div>
 

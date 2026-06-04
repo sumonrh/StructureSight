@@ -142,7 +142,7 @@ export default function ApiKeySettings({ config, onChange }: ApiKeySettingsProps
         <div className="pt-1">
           <div className="flex items-center justify-between mb-1.5">
             <label className="block text-[10px] font-bold text-slate-400 dark:text-tokyo-comment uppercase tracking-wider" htmlFor="api-key-input">
-              {config.provider === 'gemini' ? 'Custom Gemini API Key (Optional)' : `${config.provider.toUpperCase()} Private API Key`}
+              {`${config.provider.toUpperCase()} Private API Key`}
             </label>
             <span className="text-[10px] text-emerald-600 dark:text-tokyo-green font-mono flex items-center gap-1">
               <Shield className="h-3 w-3" /> Secure Link
@@ -156,24 +156,20 @@ export default function ApiKeySettings({ config, onChange }: ApiKeySettingsProps
               className="w-full bg-slate-50 dark:bg-tokyo-input border border-slate-200 dark:border-tokyo-border rounded pl-8 pr-10 py-2 text-xs font-mono text-slate-800 dark:text-tokyo-text outline-none focus:border-blue-500 dark:focus:border-tokyo-blue focus:ring-1 focus:ring-blue-500 dark:focus:ring-tokyo-blue transition-all placeholder:text-slate-400 dark:placeholder:text-slate-500"
               value={config.customKey || ''}
               onChange={(e) => handleKeyChange(e.target.value)}
-              placeholder={
-                config.provider === 'gemini' 
-                  ? 'Leave blank to use pre-configured server key' 
-                  : `Enter private ${config.provider} api key`
-              }
+              placeholder={`Enter private ${config.provider} api key`}
             />
             <Key className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-slate-400 dark:text-tokyo-muted" />
             <button
               type="button"
               onClick={() => setShowKey(!showKey)}
-              className="absolute right-2 px-1 top-2 hover:text-blue-600 dark:hover:text-tokyo-blue text-slate-400 dark:text-tokyo-muted transition-colors focus:outline-none"
+              className="absolute right-2 px-1 top-2 hover:text-blue-650 dark:hover:text-tokyo-blue text-slate-400 dark:text-tokyo-muted transition-colors focus:outline-none"
             >
               {showKey ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
             </button>
           </div>
-          {config.provider !== 'gemini' && !config.customKey && (
+          {!config.customKey && (
             <div className="text-[9px] text-amber-700 dark:text-tokyo-yellow bg-amber-50 dark:bg-tokyo-yellow/10 border border-amber-200/60 dark:border-tokyo-yellow/20 rounded p-1.5 mt-1.5 leading-snug font-mono">
-              ⚠️ Custom provider requires a private API key to initiate request tunneling.
+              ⚠️ Selected provider requires a private API key to initiate request tunneling.
             </div>
           )}
         </div>

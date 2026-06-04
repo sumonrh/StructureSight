@@ -4,8 +4,44 @@ import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
 import dotenv from "dotenv";
 import { onRequest } from "firebase-functions/v2/https";
+import crypto from "crypto";
 
 dotenv.config();
+
+// Generate ephemeral RSA-2048 key pair on startup for secure API key transit
+const { publicKey, privateKey } = crypto.generateKeyPairSync("rsa", {
+  modulusLength: 2048,
+  publicKeyEncoding: {
+    type: "spki",
+    format: "pem"
+  },
+  privateKeyEncoding: {
+    type: "pkcs8",
+    format: "pem"
+  }
+});
+
+function decryptApiKey(key: string): string {
+  if (!key) return "";
+  if (key.length > 200) {
+    try {
+      const buffer = Buffer.from(key, "base64");
+      const decrypted = crypto.privateDecrypt(
+        {
+          key: privateKey,
+          padding: crypto.constants.RSA_PKCS1_OAEP_PADDING,
+          oaepHash: "sha256",
+        },
+        buffer
+      );
+      return decrypted.toString("utf8");
+    } catch (err) {
+      console.error("Decryption error:", err);
+      throw new Error("Failed to decrypt secure API key. Please reload page.");
+    }
+  }
+  return key;
+}
 
 const PORT = process.env.PORT || 3000;
 
@@ -16,10 +52,16 @@ async function getApp() {
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
 
+  // Public key endpoint for secure API key client transit
+  app.get("/api/public-key", (req, res) => {
+    res.json({ publicKey });
+  });
+
   // AI Drawing Review API Endpoint
   app.post("/api/analyze", async (req: express.Request, res: express.Response) => {
     try {
-      const { image, provider, apiKey, model, customPrompt, drawingText, requirementsText } = req.body;
+      const { image, provider, apiKey: rawApiKey, model, customPrompt, drawingText, requirementsText } = req.body;
+      const apiKey = decryptApiKey(rawApiKey);
 
       if (!image) {
         return res.status(400).json({ error: "Missing image data for calculation" });
@@ -233,13 +275,14 @@ Adopt a highly professional, authoritative, objective, and deeply constructive t
       const { 
         image, 
         provider, 
-        apiKey, 
+        apiKey: rawApiKey, 
         model, 
         message, 
         history = [], 
         drawingText, 
         requirementsText 
       } = req.body;
+      const apiKey = decryptApiKey(rawApiKey);
 
       if (!message) {
         return res.status(400).json({ error: "Missing message parameter for Chat." });
@@ -460,6 +503,173 @@ Be highly accurate, constructive, mathematically precise, and safety-focused. Ci
     } catch (error: any) {
       console.error("API Chat proxy error:", error);
       return res.status(500).json({ error: error.message || "An unexpected server exception occurred." });
+    }
+  });
+
+  // AI Checklist Generation Endpoint based on reference standards PDF
+  app.post("/api/generate-checklist", async (req: express.Request, res: express.Response) => {
+    try {
+      const { provider, apiKey: rawApiKey, model, requirementsText } = req.body;
+      const apiKey = decryptApiKey(rawApiKey);
+
+      if (!requirementsText) {
+        return res.status(400).json({ error: "Missing requirements text to generate checklist" });
+      }
+
+      const systemInstruction = `You are an expert structural design checklist generator. Your task is to extract a list of 6 to 10 highly specific, actionable engineering checklist items from the provided reference standards & specs text. 
+Each item must fall into one of these four categories: 'safety', 'detailing', 'compliance', or 'materials'.
+You must return a valid JSON array of objects representing the checklist items. Do not include markdown code block formatting (such as \`\`\`json). Output only the raw JSON.
+Each object must have the following structure:
+{
+  "id": "string (e.g. c1, c2, c3)",
+  "label": "string (specific engineering verification statement, e.g., 'Verify shear reinforcement spacing is within ACI 318 limits')",
+  "checked": false,
+  "category": "string (must be 'safety', 'detailing', 'compliance', or 'materials')"
+}`;
+
+      const prompt = `Based on the following reference standards & requirements text, generate the engineering review checklist:\n\n${requirementsText}`;
+
+      if (provider === "gemini") {
+        const geminiKey = apiKey || process.env.GEMINI_API_KEY;
+        if (!geminiKey) {
+          return res.status(400).json({ error: "Gemini API Key is not configured on the server. Please verify the Gemini API Key is set in Settings -> Secrets, or provide a custom key." });
+        }
+
+        const ai = new GoogleGenAI({
+          apiKey: geminiKey,
+          httpOptions: {
+            headers: {
+              'User-Agent': 'aistudio-build'
+            }
+          }
+        });
+
+        const selectedModel = model || "gemini-3.5-flash";
+
+        const response = await ai.models.generateContent({
+          model: selectedModel,
+          contents: prompt,
+          config: {
+            systemInstruction: systemInstruction,
+            responseMimeType: "application/json",
+          }
+        });
+
+        let cleanText = response.text || "[]";
+        cleanText = cleanText.replace(/^\s*```json/i, "").replace(/```\s*$/, "").trim();
+        return res.json({ checklist: JSON.parse(cleanText) });
+
+      } else if (provider === "openai") {
+        const openAIKey = apiKey;
+        if (!openAIKey) {
+          return res.status(400).json({ error: "OpenAI API Key is missing. Please enter your OpenAI API key in the configuration sidebar." });
+        }
+
+        const selectedModel = model || "gpt-4o";
+
+        const response = await fetch("https://api.openai.com/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${openAIKey}`
+          },
+          body: JSON.stringify({
+            model: selectedModel,
+            response_format: { type: "json_object" },
+            messages: [
+              { "role": "system", "content": systemInstruction },
+              { "role": "user", "content": prompt }
+            ]
+          })
+        });
+
+        if (!response.ok) {
+          const errText = await response.text();
+          return res.status(response.status).json({ error: `OpenAI API returns an error: ${errText}` });
+        }
+
+        const data: any = await response.json();
+        const content = data.choices?.[0]?.message?.content || "[]";
+        let cleanText = content.replace(/^\s*```json/i, "").replace(/```\s*$/, "").trim();
+        const parsed = JSON.parse(cleanText);
+        const checklistArray = Array.isArray(parsed) ? parsed : (parsed.checklist || parsed.items || []);
+        return res.json({ checklist: checklistArray });
+
+      } else if (provider === "anthropic") {
+        const anthropicKey = apiKey;
+        if (!anthropicKey) {
+          return res.status(400).json({ error: "Anthropic API key is missing. Please enter your Claude API key in the configuration sidebar." });
+        }
+
+        const selectedModel = model || "claude-3-5-sonnet-latest";
+
+        const response = await fetch("https://api.anthropic.com/v1/messages", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-api-key": anthropicKey,
+            "anthropic-version": "2023-06-01"
+          },
+          body: JSON.stringify({
+            model: selectedModel,
+            max_tokens: 2000,
+            system: systemInstruction,
+            messages: [
+              { "role": "user", "content": prompt }
+            ]
+          })
+        });
+
+        if (!response.ok) {
+          const errText = await response.text();
+          return res.status(response.status).json({ error: `Anthropic API error: ${errText}` });
+        }
+
+        const data: any = await response.json();
+        const content = data.content?.[0]?.text || "[]";
+        let cleanText = content.replace(/^\s*```json/i, "").replace(/```\s*$/, "").trim();
+        return res.json({ checklist: JSON.parse(cleanText) });
+
+      } else if (provider === "grok") {
+        const grokKey = apiKey;
+        if (!grokKey) {
+          return res.status(400).json({ error: "xAI Grok API key is missing. Please enter your Grok API key in the configuration sidebar." });
+        }
+
+        const selectedModel = model || "grok-2-1212";
+
+        const response = await fetch("https://api.x.ai/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${grokKey}`
+          },
+          body: JSON.stringify({
+            model: selectedModel,
+            messages: [
+              { "role": "system", "content": systemInstruction },
+              { "role": "user", "content": prompt }
+            ]
+          })
+        });
+
+        if (!response.ok) {
+          const errText = await response.text();
+          return res.status(response.status).json({ error: `xAI Grok API error: ${errText}` });
+        }
+
+        const data: any = await response.json();
+        const content = data.choices?.[0]?.message?.content || "[]";
+        let cleanText = content.replace(/^\s*```json/i, "").replace(/```\s*$/, "").trim();
+        return res.json({ checklist: JSON.parse(cleanText) });
+
+      } else {
+        return res.status(400).json({ error: `Unsupported provider: ${provider}` });
+      }
+
+    } catch (error: any) {
+      console.error("Generate checklist error:", error);
+      return res.status(500).json({ error: error.message || "An unexpected error occurred while generating checklist." });
     }
   });
 
