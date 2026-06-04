@@ -9,6 +9,7 @@ interface BlueprintViewerProps {
   onDownloadPageImage: () => void;
   isLoadingFile: boolean;
   exportMode: 'jpeg' | 'png' | 'pdf';
+  isDownloading?: boolean;
 }
 
 export default function BlueprintViewer({
@@ -18,6 +19,7 @@ export default function BlueprintViewer({
   onDownloadPageImage,
   isLoadingFile,
   exportMode,
+  isDownloading = false,
 }: BlueprintViewerProps) {
   const [zoomLevel, setZoomLevel] = useState<number>(100);
 
@@ -98,10 +100,14 @@ export default function BlueprintViewer({
             {/* Export single sheet */}
             <button
               onClick={onDownloadPageImage}
-              className="flex items-center gap-1.5 py-1 px-2.5 bg-slate-50 dark:bg-tokyo-input border border-slate-200 dark:border-tokyo-border hover:bg-slate-100 dark:hover:bg-tokyo-card text-slate-600 dark:text-tokyo-text hover:text-blue-600 dark:hover:text-tokyo-blue rounded transition-all cursor-pointer font-mono text-[11px]"
+              disabled={isDownloading}
+              className={`flex items-center gap-1.5 py-1 px-2.5 bg-slate-50 dark:bg-tokyo-input border border-slate-200 dark:border-tokyo-border hover:bg-slate-100 dark:hover:bg-tokyo-card text-slate-600 dark:text-tokyo-text hover:text-blue-600 dark:hover:text-tokyo-blue rounded transition-all cursor-pointer font-mono text-[11px] ${
+                isDownloading ? 'opacity-50 cursor-not-allowed' : ''
+              }`}
               title={`Download sheet as a standalone ${exportMode.toUpperCase()} file`}
             >
-              <Download className="h-4 w-4" /> Download {exportMode.toUpperCase()}
+              <Download className={`h-4 w-4 ${isDownloading ? 'animate-spin' : ''}`} />
+              {isDownloading ? 'Downloading...' : `Download ${exportMode.toUpperCase()}`}
             </button>
           </div>
         )}

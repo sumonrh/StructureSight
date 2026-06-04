@@ -7,7 +7,8 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs
 
 export async function renderPdfPagesToImages(
   file: File,
-  onProgress?: (current: number, total: number) => void
+  onProgress?: (current: number, total: number) => void,
+  format: 'jpeg' | 'png' = 'jpeg'
 ): Promise<PdfPageImage[]> {
   const arrayBuffer = await file.arrayBuffer();
   
@@ -39,8 +40,10 @@ export async function renderPdfPagesToImages(
       viewport: viewport,
     }).promise;
 
-    // Convert canvas into JPEG format (90% compression quality for fine textual readability)
-    const base64 = canvas.toDataURL('image/jpeg', 0.9);
+    // Convert canvas into specified format
+    const mimeType = format === 'png' ? 'image/png' : 'image/jpeg';
+    const quality = format === 'jpeg' ? 0.9 : undefined;
+    const base64 = canvas.toDataURL(mimeType, quality);
 
     // Extract text from drawings page to support vision + text dual-modality
     let extractedText = '';
@@ -55,10 +58,11 @@ export async function renderPdfPagesToImages(
       console.warn(`Failed text extraction on sheet page ${i}`, textErr);
     }
     
+    const suffix = format === 'png' ? 'png' : 'jpg';
     pageImages.push({
       pageNumber: i,
       base64,
-      name: `Sheet_Page_${String(i).padStart(3, '0')}.jpg`,
+      name: `Sheet_Page_${String(i).padStart(3, '0')}.${suffix}`,
       width: viewport.width,
       height: viewport.height,
       extractedText,

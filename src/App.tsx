@@ -213,9 +213,10 @@ export default function App() {
       setCustomPrompt('');
       setRenderingProgress({ current: 0, total: 0 });
 
+      const renderFormat = exportMode === 'png' ? 'png' : 'jpeg';
       const pages = await renderPdfPagesToImages(file, (current, total) => {
         setRenderingProgress({ current, total });
-      });
+      }, renderFormat);
 
       if (pages.length === 0) {
         throw new Error('No pages were rendered from this PDF file.');
@@ -517,7 +518,11 @@ export default function App() {
             {isRenderingPdf && (
               <div className="bg-slate-50 dark:bg-tokyo-input p-3 rounded border border-slate-200 dark:border-tokyo-border space-y-2 text-center text-xs text-slate-500 dark:text-tokyo-muted">
                 <div className="flex justify-between font-mono text-[11px]">
-                  <span>Converting PDF vectors to JPEGs...</span>
+                  <span>
+                    {exportMode === 'png' && 'Converting PDF vectors to PNGs...'}
+                    {exportMode === 'jpeg' && 'Converting PDF vectors to JPEGs...'}
+                    {exportMode === 'pdf' && 'Rendering PDF sheets for Workbench...'}
+                  </span>
                   <span className="text-blue-600 dark:text-tokyo-blue font-bold">{renderingProgress.current} / {renderingProgress.total}</span>
                 </div>
                 <div className="w-full bg-slate-200 dark:bg-tokyo-card h-1 rounded-full overflow-hidden">
@@ -820,6 +825,7 @@ export default function App() {
                 onDownloadPageImage={downloadSinglePage}
                 isLoadingFile={isRenderingPdf}
                 exportMode={exportMode}
+                isDownloading={isZipping}
               />
             </div>
 
