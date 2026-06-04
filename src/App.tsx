@@ -83,6 +83,7 @@ export default function App() {
   // Checklist state
   const [checklist, setChecklist] = useState<DrawingChecklistItem[]>(initialChecklist);
   const [isGeneratingChecklist, setIsGeneratingChecklist] = useState<boolean>(false);
+  const [checklistStatusMessage, setChecklistStatusMessage] = useState<string | null>(null);
 
   // AI review reports cache: pageNumber -> AnalysisResult
   const [aiResults, setAiResults] = useState<Record<number, AnalysisResult>>({});
@@ -253,11 +254,8 @@ export default function App() {
         pagesText,
       });
 
-      // Automatically generate checklist from reference standards text
-      const requirementsText = pagesText
-        .map(p => `[Page ${p.pageNumber}]\n${p.text}`)
-        .join('\n\n');
-      generateChecklist(requirementsText);
+      setChecklist([]);
+      setChecklistStatusMessage(null);
 
     } catch (err: any) {
       console.error(err);
@@ -684,6 +682,23 @@ export default function App() {
 
   const handleChecklistReset = () => {
     setChecklist(initialChecklist);
+    setChecklistStatusMessage(null);
+  };
+
+  const handleGenerateChecklistClick = () => {
+    if (!uploadedRequirements) return;
+    const requirementsText = uploadedRequirements.pagesText
+      .map(p => `[Page ${p.pageNumber}]\n${p.text}`)
+      .join('\n\n');
+
+    if (!aiConfig.customKey) {
+      setChecklistStatusMessage("Notice: Private API Key is not provided. Loaded standard predefined checklist.");
+      const fallbackList = generateFallbackChecklist(requirementsText);
+      setChecklist(fallbackList);
+    } else {
+      setChecklistStatusMessage(null);
+      generateChecklist(requirementsText);
+    }
   };
 
   const formatFileSize = (bytes: number): string => {
@@ -970,6 +985,7 @@ export default function App() {
                     onClick={() => {
                       setUploadedRequirements(null);
                       setChecklist([]);
+                      setChecklistStatusMessage(null);
                     }}
                     className="text-slate-400 dark:text-tokyo-muted hover:text-red-500 dark:hover:text-tokyo-red transition-colors py-1 px-1.5 rounded cursor-pointer"
                     title="Remove requirements reference"
@@ -1076,6 +1092,10 @@ export default function App() {
             onToggle={handleChecklistToggle}
             onReset={handleChecklistReset}
             isLoading={isGeneratingChecklist}
+            hasUploadedRequirements={!!uploadedRequirements}
+            requirementsFileName={uploadedRequirements ? uploadedRequirements.name : ''}
+            statusMessage={checklistStatusMessage}
+            onGenerate={handleGenerateChecklistClick}
           />
           </div>
         </section>
