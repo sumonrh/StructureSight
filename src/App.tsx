@@ -201,6 +201,9 @@ export default function App() {
       setApiError(err.message || 'An error occurred while parsing the standards document.');
     } finally {
       setIsParsingRequirements(false);
+      if (requirementsInputRef.current) {
+        requirementsInputRef.current.value = '';
+      }
     }
   };
 
@@ -240,6 +243,9 @@ export default function App() {
       setApiError(err.message || 'An error occurred while parsing and rendering your PDF drawing.');
     } finally {
       setIsRenderingPdf(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
     }
   };
 
