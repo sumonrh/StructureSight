@@ -211,32 +211,22 @@ function parseMarkdownToHtml(markdown: string): string {
 interface AnalysisReportProps {
   currentResult: AnalysisResult | null;
   isLoading: boolean;
-  onRunAnalysis: (customPrompt?: string) => void;
   currentPageNumber: number;
   totalPageCount: number;
   drawingName: string;
   isBulkReviewing: boolean;
   bulkProgress: { current: number; total: number } | null;
-  hasRequirements: boolean;
-  selectedPagesCount: number;
-  onStartBulkReview: () => void;
-  hasUploadedFile: boolean;
   onStopAI?: () => void;
 }
 
 export default function AnalysisReport({
   currentResult,
   isLoading,
-  onRunAnalysis,
   currentPageNumber,
   totalPageCount,
   drawingName,
   isBulkReviewing,
   bulkProgress,
-  hasRequirements,
-  selectedPagesCount,
-  onStartBulkReview,
-  hasUploadedFile,
   onStopAI,
 }: AnalysisReportProps) {
 
@@ -598,29 +588,6 @@ export default function AnalysisReport({
         )}
       </div>
 
-      {/* Bulk Review and Fallback warning section */}
-      <div className="shrink-0 pt-4 border-t border-slate-200 dark:border-tokyo-border space-y-3 mt-4">
-        {!hasRequirements && (
-          <div className="p-3 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/30 rounded-md text-[11px] text-amber-850 dark:text-amber-200 flex items-start gap-2">
-            <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5 text-amber-650 dark:text-amber-400" />
-            <div>
-              <span className="font-semibold">Standard requirements / specs not found.</span> The check is being done based on general engineering design check principles.
-            </div>
-          </div>
-        )}
-
-        <button
-          type="button"
-          onClick={onStartBulkReview}
-          disabled={!hasUploadedFile || selectedPagesCount === 0 || isLoading || isBulkReviewing}
-          className="w-full bg-blue-600 dark:bg-tokyo-blue hover:bg-blue-700 dark:hover:bg-tokyo-blue/80 text-white disabled:opacity-40 font-mono py-2.5 rounded text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer uppercase tracking-wider shadow-sm"
-        >
-          <Sparkles className={`h-4 w-4 ${(isLoading || isBulkReviewing) ? 'animate-spin' : ''}`} />
-          {isBulkReviewing 
-            ? `Reviewing (${bulkProgress ? `${bulkProgress.current}/${bulkProgress.total}` : '...'})` 
-            : `Start Review on Selected Sheets (${selectedPagesCount})`}
-        </button>
-      </div>
     </div>
   );
 }

@@ -1208,14 +1208,26 @@ export default function App() {
                   placeholder="Draft specific review instructions here (e.g., 'Inspect the moment connection bolts on vertical support girders.' Leave empty to execute the standard expert structural audit)."
                 />
 
+                {/* Fallback Warning if no specs are uploaded */}
+                {!uploadedRequirements && (
+                  <div className="p-3 bg-amber-50 dark:bg-amber-950/20 border border-amber-250 dark:border-amber-900/30 rounded-md text-[11px] text-amber-850 dark:text-amber-200 flex items-start gap-2">
+                    <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5 text-amber-600 dark:text-amber-400" />
+                    <div>
+                      <span className="font-semibold">Standard requirements / specs not found.</span> The check is being done based on general engineering design check principles.
+                    </div>
+                  </div>
+                )}
+
                 <button
                   type="button"
-                  onClick={() => runAiReview()}
-                  disabled={isAnalyzing || isRenderingPdf}
-                  className="w-full bg-slate-900 dark:bg-tokyo-input hover:bg-black dark:hover:bg-tokyo-card text-white dark:text-tokyo-text border border-transparent dark:border-tokyo-border font-semibold py-3 px-4 rounded text-xs transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed uppercase tracking-wider font-mono cursor-pointer shadow-sm"
+                  onClick={startBulkReview}
+                  disabled={!uploadedFile || zipSelectedPages.size === 0 || isAnalyzing || isBulkReviewing}
+                  className="w-full bg-blue-600 dark:bg-tokyo-blue hover:bg-blue-700 dark:hover:bg-tokyo-blue/80 text-white disabled:opacity-40 font-mono py-3 px-4 rounded text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer uppercase tracking-wider shadow-sm"
                 >
-                  <Sparkles className={`h-4.5 w-4.5 ${isAnalyzing ? 'animate-spin' : ''}`} />
-                  {isAnalyzing ? 'Analyzing structural assets...' : 'Verify Design & Run Structural AI'}
+                  <Sparkles className={`h-4.5 w-4.5 ${(isAnalyzing || isBulkReviewing) ? 'animate-spin' : ''}`} />
+                  {isBulkReviewing 
+                    ? `Reviewing (${bulkProgress ? `${bulkProgress.current}/${bulkProgress.total}` : '...'})` 
+                    : `Start Review on Selected Sheets (${zipSelectedPages.size})`}
                 </button>
               </div>
             )}
@@ -1246,16 +1258,11 @@ export default function App() {
             <AnalysisReport
               currentResult={currentActiveResult}
               isLoading={isAnalyzing}
-              onRunAnalysis={(prompt) => runAiReview(prompt)}
               currentPageNumber={uploadedFile ? currentPageIndex + 1 : 0}
               totalPageCount={uploadedFile ? uploadedFile.totalPages : 0}
               drawingName={uploadedFile ? uploadedFile.name : 'Unknown Drawing'}
               isBulkReviewing={isBulkReviewing}
               bulkProgress={bulkProgress}
-              hasRequirements={!!uploadedRequirements}
-              selectedPagesCount={zipSelectedPages.size}
-              onStartBulkReview={startBulkReview}
-              hasUploadedFile={!!uploadedFile}
               onStopAI={stopActiveAiOperation}
             />
           </div>
