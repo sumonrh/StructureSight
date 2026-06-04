@@ -43,6 +43,32 @@ function decryptApiKey(key: string): string {
   return key;
 }
 
+function extractJson(text: string): string {
+  if (!text) return "[]";
+  let cleanText = text.trim();
+  // Strip code block markers if present
+  cleanText = cleanText.replace(/^\s*```json/i, "").replace(/^\s*```/i, "").replace(/```\s*$/, "").trim();
+  
+  const startBracket = cleanText.indexOf('[');
+  const startBrace = cleanText.indexOf('{');
+  let startIdx = -1;
+  let isArray = true;
+  if (startBracket !== -1 && (startBrace === -1 || startBracket < startBrace)) {
+    startIdx = startBracket;
+    isArray = true;
+  } else if (startBrace !== -1) {
+    startIdx = startBrace;
+    isArray = false;
+  }
+  if (startIdx !== -1) {
+    const endIdx = isArray ? cleanText.lastIndexOf(']') : cleanText.lastIndexOf('}');
+    if (endIdx !== -1 && endIdx > startIdx) {
+      cleanText = cleanText.substring(startIdx, endIdx + 1);
+    }
+  }
+  return cleanText;
+}
+
 const PORT = process.env.PORT || 3000;
 
 async function getApp() {
@@ -60,7 +86,7 @@ async function getApp() {
   // AI Drawing Review API Endpoint
   app.post("/api/analyze", async (req: express.Request, res: express.Response) => {
     try {
-      const { image, provider, apiKey: rawApiKey, model, customPrompt, drawingText, requirementsText } = req.body;
+      const { image, provider, apiKey: rawApiKey, model, customPrompt, drawingText, requirementsText, checklist } = req.body;
       const apiKey = decryptApiKey(rawApiKey);
 
       if (!image) {
@@ -71,7 +97,7 @@ async function getApp() {
       const cleanImg = image.replace(/^data:image\/[a-zA-Z]+;base64,/, "");
 
       // Robust Structural Engineering review prompt representing Independent review board
-      const systemInstruction = `You are an expert, highly meticulous Independent Lead Structural Design Reviewer with decades of experience reviewing structural engineering drawings, blueprints, and calculation sheets for major bridges, commercial buildings, steel trusses, and concrete substructures.
+      const systemInstruction = `You are an expert, highly meticulous Independent Design Reviewer with decades of experience reviewing structural engineering drawings, blueprints, and calculation sheets for major bridges, commercial buildings, steel trusses, and concrete substructures.
 
 Your goal is to perform a rigorous, safety-oriented, and highly analytical review of the provided structural engineering drawing of a building, bridge, or structural asset.
 
@@ -92,6 +118,13 @@ Adopt a highly professional, authoritative, objective, and deeply constructive t
 
       if (requirementsText) {
         finalPrompt += `\n\n[USER-PROVIDED REFERENCE STANDARDS, REGULATORY SPECS & REQUIREMENT DOCUMENTS]\n${requirementsText}\n\nCRITICAL DIRECTIVE: Test and audit the structural drawing details specifically against the above user-provided requirements/standards document. Report any discrepancies, non-compliant dimensioning, sizing errors, material deviations, or spacing conflicts with standard limits, and provide concrete actionable engineering recommendations to ensure safety and safety compliance.`;
+      }
+
+      if (checklist && Array.isArray(checklist) && checklist.length > 0) {
+        const checklistStr = checklist
+          .map((item: any) => `- [${item.category.toUpperCase()}] ${item.label}`)
+          .join('\n');
+        finalPrompt += `\n\n[ENGINEERING REVIEW CHECKLIST]\nPlease verify the structural drawing details specifically against the following checklist criteria:\n${checklistStr}\n\nIn your review report, explicitly state which checklist criteria are met, which are not met, and what design changes/corrections are required to satisfy them.`;
       }
 
       if (provider === "gemini") {
@@ -288,16 +321,16 @@ Adopt a highly professional, authoritative, objective, and deeply constructive t
         return res.status(400).json({ error: "Missing message parameter for Chat." });
       }
 
-      const systemInstruction = `You are an expert, highly meticulous Independent Lead Structural Design Reviewer and Veteran Civil Engineer.
-Your role now is to assist the user by answering specific engineering questions in real-time about the current structural drawing sheet, blueprint, or referenced standard documents.
+      const systemInstruction = `You are an expert, highly meticulous Independent Design Reviewer and Veteran Civil Engineer.
+Your role now is to assist the user by answering specific engineering questions in real-time about the structural drawing sheets, blueprint pages, or referenced standard documents.
 
-Help the user by analyzing details visible in the image, text embedded in the drawing, or the requirements PDF reference.
+Help the user by analyzing details visible in the image of the current active sheet, text embedded across all sheets of the drawing, or the requirements PDF reference.
 Be highly accurate, constructive, mathematically precise, and safety-focused. Cite standard codes (e.g. ACI 318, AISC 360, IBC, ASCE 7) where appropriate.`;
 
       let finalPrompt = message;
       let contextInfo = "";
       if (drawingText) {
-        contextInfo += `[EXTRACTED TEXT FROM CURRENT DRAWING SHEET]\n${drawingText}\n\n`;
+        contextInfo += `[EXTRACTED TEXT FROM DRAWING SHEETS]\n${drawingText}\n\n`;
       }
       if (requirementsText) {
         contextInfo += `[USER-PROVIDED REFERENCE STANDARDS & REQUIREMENTS]\n${requirementsText}\n\n`;
@@ -555,9 +588,10 @@ Each object must have the following structure:
           }
         });
 
-        let cleanText = response.text || "[]";
-        cleanText = cleanText.replace(/^\s*```json/i, "").replace(/```\s*$/, "").trim();
-        return res.json({ checklist: JSON.parse(cleanText) });
+        const cleanText = extractJson(response.text || "[]");
+        const parsed = JSON.parse(cleanText);
+        const checklistArray = Array.isArray(parsed) ? parsed : (parsed.checklist || parsed.items || []);
+        return res.json({ checklist: checklistArray });
 
       } else if (provider === "openai") {
         const openAIKey = apiKey;
@@ -590,7 +624,7 @@ Each object must have the following structure:
 
         const data: any = await response.json();
         const content = data.choices?.[0]?.message?.content || "[]";
-        let cleanText = content.replace(/^\s*```json/i, "").replace(/```\s*$/, "").trim();
+        const cleanText = extractJson(content);
         const parsed = JSON.parse(cleanText);
         const checklistArray = Array.isArray(parsed) ? parsed : (parsed.checklist || parsed.items || []);
         return res.json({ checklist: checklistArray });
@@ -627,8 +661,10 @@ Each object must have the following structure:
 
         const data: any = await response.json();
         const content = data.content?.[0]?.text || "[]";
-        let cleanText = content.replace(/^\s*```json/i, "").replace(/```\s*$/, "").trim();
-        return res.json({ checklist: JSON.parse(cleanText) });
+        const cleanText = extractJson(content);
+        const parsed = JSON.parse(cleanText);
+        const checklistArray = Array.isArray(parsed) ? parsed : (parsed.checklist || parsed.items || []);
+        return res.json({ checklist: checklistArray });
 
       } else if (provider === "grok") {
         const grokKey = apiKey;
@@ -660,8 +696,10 @@ Each object must have the following structure:
 
         const data: any = await response.json();
         const content = data.choices?.[0]?.message?.content || "[]";
-        let cleanText = content.replace(/^\s*```json/i, "").replace(/```\s*$/, "").trim();
-        return res.json({ checklist: JSON.parse(cleanText) });
+        const cleanText = extractJson(content);
+        const parsed = JSON.parse(cleanText);
+        const checklistArray = Array.isArray(parsed) ? parsed : (parsed.checklist || parsed.items || []);
+        return res.json({ checklist: checklistArray });
 
       } else {
         return res.status(400).json({ error: `Unsupported provider: ${provider}` });

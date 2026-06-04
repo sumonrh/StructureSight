@@ -11,7 +11,7 @@ import {
   CornerDownLeft,
   Construction
 } from 'lucide-react';
-import { ChatMessage, PdfPageImage, PDFRequirementsFile, AiModelConfig } from '../types';
+import { ChatMessage, PdfPageImage, PDFRequirementsFile, AiModelConfig, PDFDrawingFile } from '../types';
 import { encryptWithPublicKey } from '../utils/crypto';
 
 interface EngineeringChatProps {
@@ -19,6 +19,7 @@ interface EngineeringChatProps {
   uploadedRequirements: PDFRequirementsFile | null;
   aiConfig: AiModelConfig;
   publicKey?: string;
+  uploadedFile: PDFDrawingFile | null;
 }
 
 export default function EngineeringChat({
@@ -26,6 +27,7 @@ export default function EngineeringChat({
   uploadedRequirements,
   aiConfig,
   publicKey,
+  uploadedFile,
 }: EngineeringChatProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState<string>('');
@@ -89,6 +91,22 @@ export default function EngineeringChat({
         content: msg.content
       }));
 
+      let drawingText = '';
+      if (uploadedFile) {
+        const activePageText = pageImage ? `[CURRENT ACTIVE VIEWED SHEET - Page ${pageImage.pageNumber}]\n${pageImage.extractedText || ''}\n\n` : '';
+        const allSheetsText = uploadedFile.pages
+          .map(p => `[Drawing Sheet Page ${p.pageNumber} - name: ${p.name}]\n${p.extractedText || ''}`)
+          .join('\n\n');
+        
+        drawingText = activePageText + '[ALL DRAWING SHEETS EXTRACTED TEXT]\n' + allSheetsText;
+
+        if (drawingText.length > 35000) {
+          drawingText = drawingText.substring(0, 35000) + '\n\n... [Drawing text truncated] ...';
+        }
+      } else if (pageImage) {
+        drawingText = pageImage.extractedText || '';
+      }
+
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: {
@@ -101,7 +119,7 @@ export default function EngineeringChat({
           model: aiConfig.modelName,
           message: textToSend,
           history: historyPayload,
-          drawingText: pageImage?.extractedText || '',
+          drawingText,
           requirementsText,
         }),
       });

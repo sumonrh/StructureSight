@@ -10,6 +10,12 @@ interface AnalysisReportProps {
   currentPageNumber: number;
   totalPageCount: number;
   drawingName: string;
+  isBulkReviewing: boolean;
+  bulkProgress: { current: number; total: number } | null;
+  hasRequirements: boolean;
+  selectedPagesCount: number;
+  onStartBulkReview: () => void;
+  hasUploadedFile: boolean;
 }
 
 export default function AnalysisReport({
@@ -19,6 +25,12 @@ export default function AnalysisReport({
   currentPageNumber,
   totalPageCount,
   drawingName,
+  isBulkReviewing,
+  bulkProgress,
+  hasRequirements,
+  selectedPagesCount,
+  onStartBulkReview,
+  hasUploadedFile,
 }: AnalysisReportProps) {
 
   const copyToClipboard = () => {
@@ -36,7 +48,7 @@ Drawing Document:    ${drawingName}
 Drawing Page/Sheet:  Sheet ${currentResult.pageNumber} of ${totalPageCount}
 Reviewing Engine:    ${currentResult.provider.toUpperCase()} (Model: ${currentResult.modelName})
 Review Timestamp:    ${new Date(currentResult.timestamp).toLocaleString()}
-Review Category:     Independent Lead Structural Engineer Audit
+Review Category:     Independent Design Check
 ======================================================================
 
 `;
@@ -56,7 +68,7 @@ Review Category:     Independent Lead Structural Engineer Audit
         <div className="flex items-center gap-2">
           <Sparkles className="h-5 w-5 text-blue-600 dark:text-tokyo-blue" />
           <h3 className="font-display font-semibold text-sm tracking-wide text-slate-900 dark:text-tokyo-text uppercase">
-             Lead structural Engineering Review
+             Independent Design Check
           </h3>
         </div>
         {currentResult && (
@@ -82,16 +94,22 @@ Review Category:     Independent Lead Structural Engineer Audit
       {/* Main Container: Split or scrollable */}
       <div className="flex-1 overflow-y-auto space-y-4 pr-1">
         {/* Render loading state */}
-        {isLoading ? (
+        {isLoading || isBulkReviewing ? (
           <div className="flex flex-col items-center justify-center py-20 text-center space-y-4 bg-slate-50/60 dark:bg-tokyo-input/40 rounded-lg border border-slate-200 dark:border-tokyo-border">
             <div className="relative">
               <div className="h-12 w-12 rounded-full border-4 border-slate-250 dark:border-tokyo-border border-t-blue-600 dark:border-tokyo-blue animate-spin" />
               <Sparkles className="h-5 w-5 text-blue-500 absolute inset-0 m-auto animate-pulse" />
             </div>
             <div className="space-y-1">
-              <p className="text-xs font-mono text-blue-600 dark:text-tokyo-blue uppercase tracking-widest animate-pulse">Running Structural FEA/Vision Models...</p>
-              <p className="text-xs text-slate-500 dark:text-tokyo-muted max-w-xs leading-normal font-sans">
-                Executing design audits, extracting tabular details, assessing load paths, and identifying potential code violations under ACI & AISC standards.
+              <p className="text-xs font-mono text-blue-600 dark:text-tokyo-blue uppercase tracking-widest animate-pulse">
+                {isBulkReviewing 
+                  ? `Reviewing Sheet ${bulkProgress?.current} of ${bulkProgress?.total}...` 
+                  : 'Running Structural FEA/Vision Models...'}
+              </p>
+              <p className="text-xs text-slate-550 dark:text-tokyo-muted max-w-xs leading-normal font-sans">
+                {isBulkReviewing 
+                  ? 'Performing batch design checks across selected blueprint sheets using specified engineering guidelines.' 
+                  : 'Executing design audits, extracting tabular details, assessing load paths, and identifying potential code violations under ACI & AISC standards.'}
               </p>
             </div>
           </div>
@@ -137,6 +155,30 @@ Review Category:     Independent Lead Structural Engineer Audit
             </div>
           </div>
         )}
+      </div>
+
+      {/* Bulk Review and Fallback warning section */}
+      <div className="shrink-0 pt-4 border-t border-slate-200 dark:border-tokyo-border space-y-3 mt-4">
+        {!hasRequirements && (
+          <div className="p-3 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/30 rounded-md text-[11px] text-amber-850 dark:text-amber-200 flex items-start gap-2">
+            <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5 text-amber-650 dark:text-amber-400" />
+            <div>
+              <span className="font-semibold">Standard requirements / specs not found.</span> The check is being done based on general engineering design check principles.
+            </div>
+          </div>
+        )}
+
+        <button
+          type="button"
+          onClick={onStartBulkReview}
+          disabled={!hasUploadedFile || selectedPagesCount === 0 || isLoading || isBulkReviewing}
+          className="w-full bg-blue-600 dark:bg-tokyo-blue hover:bg-blue-700 dark:hover:bg-tokyo-blue/80 text-white disabled:opacity-40 font-mono py-2.5 rounded text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer uppercase tracking-wider shadow-sm"
+        >
+          <Sparkles className={`h-4 w-4 ${(isLoading || isBulkReviewing) ? 'animate-spin' : ''}`} />
+          {isBulkReviewing 
+            ? `Reviewing (${bulkProgress ? `${bulkProgress.current}/${bulkProgress.total}` : '...'})` 
+            : `Start Review on Selected Sheets (${selectedPagesCount})`}
+        </button>
       </div>
     </div>
   );

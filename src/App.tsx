@@ -87,10 +87,13 @@ export default function App() {
   const [isAnalyzing, setIsAnalyzing] = useState<boolean>(false);
   const [apiError, setApiError] = useState<string | null>(null);
 
+  const [isBulkReviewing, setIsBulkReviewing] = useState<boolean>(false);
+  const [bulkProgress, setBulkProgress] = useState<{ current: number; total: number } | null>(null);
+
   // Selected pages for compressed ZIP bundle
   const [zipSelectedPages, setZipSelectedPages] = useState<Set<number>>(new Set());
   const [isZipping, setIsZipping] = useState<boolean>(false);
-  const [exportMode, setExportMode] = useState<'jpeg' | 'png' | 'pdf'>('jpeg');
+  const [exportMode, setExportMode] = useState<'jpeg' | 'png' | 'pdf'>('png');
 
   // Custom prompting state
   const [customPrompt, setCustomPrompt] = useState<string>('');
@@ -219,6 +222,50 @@ export default function App() {
     }
   };
 
+  const generateFallbackChecklist = (text: string): DrawingChecklistItem[] => {
+    const lowerText = text.toLowerCase();
+    const items: DrawingChecklistItem[] = [];
+    let count = 1;
+
+    const addCheck = (label: string, category: 'safety' | 'detailing' | 'compliance' | 'materials') => {
+      items.push({
+        id: `c${count++}`,
+        label,
+        checked: false,
+        category,
+      });
+    };
+
+    // Keyword heuristics
+    if (lowerText.includes('concrete') || lowerText.includes('rebar') || lowerText.includes('aci')) {
+      addCheck("Verify shear reinforcement spacing is within ACI 318 limits", "compliance");
+      addCheck("Check concrete compressive strength minimum rating (f'c)", "materials");
+      addCheck("Verify tension lap splice embedment lengths for column rebar", "detailing");
+    }
+    if (lowerText.includes('steel') || lowerText.includes('bolt') || lowerText.includes('weld') || lowerText.includes('aisc')) {
+      addCheck("Check structural steel grade specifications (e.g., ASTM A992, A36)", "materials");
+      addCheck("Verify bolt spacing and edge distance criteria (AISC 360)", "compliance");
+      addCheck("Inspect moment connection weld sizes and detailing notes", "detailing");
+    }
+    if (lowerText.includes('seismic') || lowerText.includes('earthquake') || lowerText.includes('wind') || lowerText.includes('load')) {
+      addCheck("Check lateral load resistance paths (shear walls / braced frames)", "safety");
+      addCheck("Verify design wind loading and seismic hazard design parameters", "compliance");
+      addCheck("Assess ductile detailing for column-beam structural joints", "safety");
+    } else {
+      addCheck("Verify primary load path continuity from foundation to roof", "safety");
+    }
+
+    // Default structural checklist if count is low
+    if (items.length < 5) {
+      addCheck("Verify foundation bearing capacity and soil pressure specs", "safety");
+      addCheck("Check beam-to-column framing shear connection detailing", "detailing");
+      addCheck("Ensure compliance with general IBC building code loading standards", "compliance");
+      addCheck("Check structural materials scheduling grid compatibility", "materials");
+    }
+
+    return items;
+  };
+
   const generateChecklist = async (requirementsText: string) => {
     try {
       setIsGeneratingChecklist(true);
@@ -265,8 +312,10 @@ export default function App() {
       }
 
     } catch (err: any) {
-      console.error(err);
-      setApiError('Failed to generate checklist from standards: ' + err.message);
+      console.warn("AI checklist generation failed, running fallback heuristic checklist generator:", err);
+      const fallbackList = generateFallbackChecklist(requirementsText);
+      setChecklist(fallbackList);
+      setApiError('Notice: Checklist generated using client-side design rules (' + (err.message || 'API connection issue') + ')');
     } finally {
       setIsGeneratingChecklist(false);
     }
@@ -360,6 +409,7 @@ export default function App() {
           customPrompt: activePrompt,
           drawingText: activePage.extractedText || '',
           requirementsText,
+          checklist,
         }),
       });
 
@@ -388,6 +438,92 @@ export default function App() {
       setApiError(err.message || 'The structural analysis request could not be completed.');
     } finally {
       setIsAnalyzing(false);
+    }
+  };
+
+  const startBulkReview = async () => {
+    if (!uploadedFile || zipSelectedPages.size === 0) return;
+    setIsBulkReviewing(true);
+    setApiError(null);
+    const pagesToReview = Array.from(zipSelectedPages).sort((a, b) => a - b);
+    setBulkProgress({ current: 0, total: pagesToReview.length });
+
+    try {
+      let securedApiKey = aiConfig.customKey || '';
+      if (securedApiKey && publicKey) {
+        try {
+          securedApiKey = await encryptWithPublicKey(publicKey, securedApiKey);
+        } catch (err) {
+          console.warn("Client encryption failed, falling back to secure channel transit:", err);
+        }
+      }
+
+      let requirementsText = '';
+      if (uploadedRequirements) {
+        requirementsText = uploadedRequirements.pagesText
+          .map(p => `[Standard Doc Page ${p.pageNumber}]\n${p.text}`)
+          .join('\n\n');
+        
+        if (requirementsText.length > 35000) {
+          requirementsText = requirementsText.substring(0, 35000) + '\n\n... [Reference text truncated to avoid exceeding model input length limits] ...';
+        }
+      }
+
+      for (let i = 0; i < pagesToReview.length; i++) {
+        const pageNum = pagesToReview[i];
+        setBulkProgress({ current: i + 1, total: pagesToReview.length });
+
+        const activePage = uploadedFile.pages.find(p => p.pageNumber === pageNum);
+        if (!activePage) continue;
+
+        let activePrompt = customPrompt || "Analyze this structural drawing in detail. Perform an independent engineer's review of the safety, load transfers, rebar / connection detailing, map out text / notes, and propose concrete design suggestions.";
+        if (!uploadedRequirements) {
+          activePrompt += "\n\nNote: The standard requirements/specs document was not found, so please perform the review based on general engineering design check principles.";
+        }
+
+        const response = await fetch('/api/analyze', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            image: activePage.base64,
+            provider: aiConfig.provider,
+            apiKey: securedApiKey,
+            model: aiConfig.modelName,
+            customPrompt: activePrompt,
+            drawingText: activePage.extractedText || '',
+            requirementsText,
+            checklist,
+          }),
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.error || `Server error while performing design review on Sheet ${pageNum}.`);
+        }
+
+        const result: AnalysisResult = {
+          pageNumber: activePage.pageNumber,
+          analysis: data.analysis,
+          provider: aiConfig.provider,
+          modelName: aiConfig.modelName,
+          timestamp: new Date().toISOString(),
+        };
+
+        setAiResults(prev => ({
+          ...prev,
+          [activePage.pageNumber]: result
+        }));
+      }
+
+    } catch (err: any) {
+      console.error(err);
+      setApiError(err.message || 'The bulk structural analysis request could not be completed.');
+    } finally {
+      setIsBulkReviewing(false);
+      setBulkProgress(null);
     }
   };
 
@@ -646,17 +782,6 @@ export default function App() {
             <div className="grid grid-cols-3 gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-md border border-slate-200 dark:border-tokyo-border text-[10px] font-mono font-semibold">
               <button
                 type="button"
-                onClick={() => setExportMode('jpeg')}
-                className={`py-1 rounded transition-all cursor-pointer ${
-                  exportMode === 'jpeg'
-                    ? 'bg-white dark:bg-tokyo-card text-blue-600 dark:text-tokyo-blue shadow-sm font-semibold'
-                    : 'text-slate-500 hover:text-slate-700 dark:text-tokyo-muted dark:hover:text-tokyo-text'
-                }`}
-              >
-                JPEG
-              </button>
-              <button
-                type="button"
                 onClick={() => setExportMode('png')}
                 className={`py-1 rounded transition-all cursor-pointer ${
                   exportMode === 'png'
@@ -665,6 +790,17 @@ export default function App() {
                 }`}
               >
                 PNG
+              </button>
+              <button
+                type="button"
+                onClick={() => setExportMode('jpeg')}
+                className={`py-1 rounded transition-all cursor-pointer ${
+                  exportMode === 'jpeg'
+                    ? 'bg-white dark:bg-tokyo-card text-blue-600 dark:text-tokyo-blue shadow-sm font-semibold'
+                    : 'text-slate-500 hover:text-slate-700 dark:text-tokyo-muted dark:hover:text-tokyo-text'
+                }`}
+              >
+                JPEG
               </button>
               <button
                 type="button"
@@ -956,10 +1092,11 @@ export default function App() {
               uploadedRequirements={uploadedRequirements}
               aiConfig={aiConfig}
               publicKey={publicKey}
+              uploadedFile={uploadedFile}
             />
           </div>
 
-          {/* Column C: Lead Structural Engineering Review */}
+          {/* Column C: Independent Design Check */}
           <div className="flex flex-col lg:col-span-1">
             <AnalysisReport
               currentResult={currentActiveResult}
@@ -968,6 +1105,12 @@ export default function App() {
               currentPageNumber={uploadedFile ? currentPageIndex + 1 : 0}
               totalPageCount={uploadedFile ? uploadedFile.totalPages : 0}
               drawingName={uploadedFile ? uploadedFile.name : 'Unknown Drawing'}
+              isBulkReviewing={isBulkReviewing}
+              bulkProgress={bulkProgress}
+              hasRequirements={!!uploadedRequirements}
+              selectedPagesCount={zipSelectedPages.size}
+              onStartBulkReview={startBulkReview}
+              hasUploadedFile={!!uploadedFile}
             />
           </div>
 
