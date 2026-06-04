@@ -41,13 +41,7 @@ export default function EngineeringChat({
     scrollRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isSending]);
 
-  // Context-aware smart engineering query prompts
-  const chatSuggestions = [
-    { label: "🔍 Check ACI-318 Lap Splice Limits", text: "Are the cement rebar lap splice configurations on this sheet compliant with ACI 318 minimum length rules? Specify tension lap length criteria." },
-    { label: "⚡ Verify Load Pathway Gaps", text: "Look at the beam-column joints and columns. Do you observe any discontinuities in structural shear/moment load transfers?" },
-    { label: "📐 Audit Weld/Bolt Schedules", text: "Please inspect the steel structural node bolts and welded splice patterns. Does the drawing provide full dimensions and standard specs?" },
-    { label: "📋 Align specs with reference file", text: "Could you cross-audit the material strengths on this sheet (concrete f'c, steel yield) directly against any reference requirements we uploaded?" }
-  ];
+
 
   const handleSend = async (textToSend: string) => {
     if (!textToSend.trim()) return;
@@ -202,25 +196,7 @@ export default function EngineeringChat({
               </p>
             </div>
 
-            {/* Smart Context Suggestion Pills */}
-            <div className="w-full max-w-md pt-2 space-y-2">
-              <span className="text-[10px] uppercase font-bold tracking-wider font-mono text-slate-400 dark:text-tokyo-comment block text-left">
-                Suggested Civil reviews:
-              </span>
-              <div className="flex flex-col gap-1.5 ready-prompts">
-                {chatSuggestions.map((suggestion, idx) => (
-                  <button
-                    key={idx}
-                    type="button"
-                    onClick={() => handleSend(suggestion.text)}
-                    className="w-full text-left p-2 rounded text-xs bg-white dark:bg-tokyo-input hover:bg-slate-50 dark:hover:bg-tokyo-card border border-slate-200 dark:border-tokyo-border text-slate-700 dark:text-tokyo-text hover:text-blue-700 dark:hover:text-tokyo-blue hover:border-blue-300 dark:hover:border-tokyo-blue/50 transition-all font-sans cursor-pointer shadow-sm flex items-center justify-between text-ellipsis overflow-hidden"
-                  >
-                    <span className="truncate">{suggestion.label}</span>
-                    <span className="text-[9px] text-slate-400 dark:text-tokyo-muted uppercase font-bold font-mono shrink-0 ml-2">RUN ➔</span>
-                  </button>
-                ))}
-              </div>
-            </div>
+
           </div>
         ) : (
           <div className="space-y-3">
