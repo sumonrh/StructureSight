@@ -1,4 +1,5 @@
 import * as pdfjsLib from 'pdfjs-dist';
+import { PDFDocument } from 'pdf-lib';
 import { PdfPageImage } from '../types';
 
 // Set matching worker from CDN dynamically so Vite doesn't complain about worker bundling, or custom assets
@@ -106,4 +107,48 @@ export async function extractPdfText(
   }
 
   return extractedPages;
+}
+
+export async function renderPdfPageToImage(
+  file: File,
+  pageNumber: number,
+  format: 'jpeg' | 'png'
+): Promise<string> {
+  const arrayBuffer = await file.arrayBuffer();
+  const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+  const pdf = await loadingTask.promise;
+  const page = await pdf.getPage(pageNumber);
+  
+  const scale = 2.0; 
+  const viewport = page.getViewport({ scale });
+  
+  const canvas = document.createElement('canvas');
+  canvas.width = viewport.width;
+  canvas.height = viewport.height;
+  
+  const context = canvas.getContext('2d');
+  if (!context) {
+    throw new Error(`Failed to compute 2D context on page rendering canvas for Page ${pageNumber}`);
+  }
+
+  await page.render({
+    canvasContext: context,
+    viewport: viewport,
+  }).promise;
+
+  const mimeType = format === 'png' ? 'image/png' : 'image/jpeg';
+  const quality = format === 'jpeg' ? 0.9 : undefined;
+  return canvas.toDataURL(mimeType, quality);
+}
+
+export async function renderPdfPageToPdfBytes(
+  file: File,
+  pageNumber: number
+): Promise<Uint8Array> {
+  const arrayBuffer = await file.arrayBuffer();
+  const pdfDoc = await PDFDocument.load(arrayBuffer);
+  const newPdf = await PDFDocument.create();
+  const [copiedPage] = await newPdf.copyPages(pdfDoc, [pageNumber - 1]);
+  newPdf.addPage(copiedPage);
+  return await newPdf.save();
 }

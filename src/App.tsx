@@ -21,8 +21,8 @@ import {
   Sun,
   Moon
 } from 'lucide-react';
-import { renderPdfPagesToImages, extractPdfText } from './utils/pdfRenderer';
-import { generateZip } from './utils/zipper';
+import { renderPdfPagesToImages, extractPdfText, renderPdfPageToImage, renderPdfPageToPdfBytes } from './utils/pdfRenderer';
+import { generateZipForExport } from './utils/zipper';
 import { PDFDrawingFile, PdfPageImage, AiModelConfig, AnalysisResult, DrawingChecklistItem, PDFRequirementsFile } from './types';
 import ApiKeySettings from './components/ApiKeySettings';
 import DrawingsChecklist from './components/DrawingsChecklist';
@@ -97,6 +97,7 @@ export default function App() {
   // Selected pages for compressed ZIP bundle
   const [zipSelectedPages, setZipSelectedPages] = useState<Set<number>>(new Set());
   const [isZipping, setIsZipping] = useState<boolean>(false);
+  const [exportMode, setExportMode] = useState<'jpeg' | 'png' | 'pdf'>('jpeg');
 
   // Custom prompting state
   const [customPrompt, setCustomPrompt] = useState<string>('');
@@ -225,6 +226,7 @@ export default function App() {
         size: file.size,
         totalPages: pages.length,
         pages,
+        originalFile: file,
       });
 
       // Select all pages in zip bundle by default
@@ -310,20 +312,25 @@ export default function App() {
 
   // ZIP download compiled archive
   const downloadZipArchive = async () => {
-    if (!uploadedFile || zipSelectedPages.size === 0) return;
+    if (!uploadedFile || zipSelectedPages.size === 0 || !uploadedFile.originalFile) return;
 
     setIsZipping(true);
     try {
-      // Filter pages that are checked
-      const selectedPages = uploadedFile.pages.filter(page =>
-        zipSelectedPages.has(page.pageNumber)
-      );
+      const selectedPageNumbers = Array.from(zipSelectedPages).sort((a, b) => a - b);
 
-      const zipBlob = await generateZip(selectedPages);
+      const zipBlob = await generateZipForExport(
+        uploadedFile.originalFile,
+        selectedPageNumbers,
+        exportMode,
+        uploadedFile.pages
+      );
       const url = URL.createObjectURL(zipBlob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `${uploadedFile.name.replace(/\.[^/.]+$/, "")}_Images.zip`;
+      
+      const suffix = exportMode === 'pdf' ? 'PDF_Sheets' : (exportMode === 'png' ? 'PNG_Images' : 'JPEG_Images');
+      link.download = `${uploadedFile.name.replace(/\.[^/.]+$/, "")}_${suffix}.zip`;
+      
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -336,18 +343,50 @@ export default function App() {
     }
   };
 
-  // Single Page Image Download
-  const downloadSinglePage = () => {
-    if (!uploadedFile) return;
+  // Single Page Download
+  const downloadSinglePage = async () => {
+    if (!uploadedFile || !uploadedFile.originalFile) return;
     const page = uploadedFile.pages[currentPageIndex];
     if (!page) return;
 
-    const link = document.createElement('a');
-    link.href = page.base64;
-    link.download = `${uploadedFile.name.replace(/\.[^/.]+$/, "")}_Page_${String(page.pageNumber).padStart(3, '0')}.jpg`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    const baseName = uploadedFile.name.replace(/\.[^/.]+$/, "");
+    const pageStr = String(page.pageNumber).padStart(3, '0');
+
+    setIsZipping(true);
+    try {
+      if (exportMode === 'jpeg') {
+        const link = document.createElement('a');
+        link.href = page.base64;
+        link.download = `${baseName}_Page_${pageStr}.jpg`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      } else if (exportMode === 'png') {
+        const pngBase64 = await renderPdfPageToImage(uploadedFile.originalFile, page.pageNumber, 'png');
+        const link = document.createElement('a');
+        link.href = pngBase64;
+        link.download = `${baseName}_Page_${pageStr}.png`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      } else if (exportMode === 'pdf') {
+        const pdfBytes = await renderPdfPageToPdfBytes(uploadedFile.originalFile, page.pageNumber);
+        const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `${baseName}_Page_${pageStr}.pdf`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+      }
+    } catch (err: any) {
+      console.error(err);
+      alert('Failed to download single sheet: ' + err.message);
+    } finally {
+      setIsZipping(false);
+    }
   };
 
   // Toggle zip compilation inclusion
@@ -512,6 +551,66 @@ export default function App() {
                 </button>
               </div>
             )}
+          </div>
+
+          {/* Conversion Options & AI Interpretation */}
+          <div className="space-y-3 pt-3 border-t border-slate-100 dark:border-tokyo-border">
+            <label className="block text-xs font-semibold text-slate-400 dark:text-tokyo-comment uppercase tracking-wider">
+              Conversion Option & AI Interpretation
+            </label>
+            <div className="grid grid-cols-3 gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-md border border-slate-200 dark:border-tokyo-border text-[10px] font-mono font-semibold">
+              <button
+                type="button"
+                onClick={() => setExportMode('jpeg')}
+                className={`py-1 rounded transition-all cursor-pointer ${
+                  exportMode === 'jpeg'
+                    ? 'bg-white dark:bg-tokyo-card text-blue-600 dark:text-tokyo-blue shadow-sm font-semibold'
+                    : 'text-slate-500 hover:text-slate-700 dark:text-tokyo-muted dark:hover:text-tokyo-text'
+                }`}
+              >
+                JPEG
+              </button>
+              <button
+                type="button"
+                onClick={() => setExportMode('png')}
+                className={`py-1 rounded transition-all cursor-pointer ${
+                  exportMode === 'png'
+                    ? 'bg-white dark:bg-tokyo-card text-blue-600 dark:text-tokyo-blue shadow-sm font-semibold'
+                    : 'text-slate-500 hover:text-slate-700 dark:text-tokyo-muted dark:hover:text-tokyo-text'
+                }`}
+              >
+                PNG
+              </button>
+              <button
+                type="button"
+                onClick={() => setExportMode('pdf')}
+                className={`py-1 rounded transition-all cursor-pointer ${
+                  exportMode === 'pdf'
+                    ? 'bg-white dark:bg-tokyo-card text-blue-600 dark:text-tokyo-blue shadow-sm font-semibold'
+                    : 'text-slate-500 hover:text-slate-700 dark:text-tokyo-muted dark:hover:text-tokyo-text'
+                }`}
+              >
+                Split PDF
+              </button>
+            </div>
+            {/* AI Interpretation Note */}
+            <div className="bg-blue-50/50 dark:bg-tokyo-blue/5 border border-blue-100 dark:border-tokyo-border/30 rounded p-2.5 text-[10.5px] leading-relaxed font-sans text-slate-650 dark:text-tokyo-muted">
+              {exportMode === 'jpeg' && (
+                <p>
+                  <span className="font-semibold text-slate-800 dark:text-tokyo-text">JPEG (Default):</span> High-compression web-standard format. Excellent for fast page rendering and general review. Vision models parse it well, but extremely fine rebar spacing annotations or pixelated detail symbols may be slightly distorted by JPEG compression blocks.
+                </p>
+              )}
+              {exportMode === 'png' && (
+                <p>
+                  <span className="font-semibold text-slate-800 dark:text-tokyo-text">PNG (Lossless):</span> Lossless pixel fidelity. <strong className="text-blue-600 dark:text-tokyo-blue font-semibold">Recommended for AI Vision models.</strong> By preserving every vector stroke, thin grid lines, and microscopic text labels without compression artifacts, it prevents the AI from misreading tiny dimensions.
+                </p>
+              )}
+              {exportMode === 'pdf' && (
+                <p>
+                  <span className="font-semibold text-slate-800 dark:text-tokyo-text">Split PDF (Vector):</span> Retains original document structures and text layers. Excellent for text-extraction models. However, standard vision models cannot read PDFs directly and will convert them to images behind the scenes, making PNG a cleaner direct vision choice.
+                </p>
+              )}
+            </div>
           </div>
 
           {/* Standards & Requirements PDF Reference Ingestion */}
@@ -681,7 +780,7 @@ export default function App() {
                   className="w-full bg-blue-600 dark:bg-tokyo-blue hover:bg-blue-700 dark:hover:bg-tokyo-blue/80 text-white border border-transparent disabled:opacity-40 disabled:hover:bg-blue-600 font-mono py-2.5 rounded text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer uppercase tracking-wider shadow-sm"
                 >
                   <Download className={`h-4 w-4 ${isZipping ? 'animate-bounce' : ''}`} />
-                  {isZipping ? 'Archiving & Compiling...' : `Download ZIP (${zipSelectedPages.size} Sheets)`}
+                  {isZipping ? 'Archiving & Compiling...' : `Download ZIP (${zipSelectedPages.size} ${exportMode === 'pdf' ? 'PDFs' : exportMode.toUpperCase() + 's'})`}
                 </button>
               </div>
             </div>
@@ -720,6 +819,7 @@ export default function App() {
                 onToggleZipSelection={() => currentActivePageImage && togglePageZipSelection(currentActivePageImage.pageNumber)}
                 onDownloadPageImage={downloadSinglePage}
                 isLoadingFile={isRenderingPdf}
+                exportMode={exportMode}
               />
             </div>
 

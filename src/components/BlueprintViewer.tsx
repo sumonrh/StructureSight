@@ -8,6 +8,7 @@ interface BlueprintViewerProps {
   onToggleZipSelection: () => void;
   onDownloadPageImage: () => void;
   isLoadingFile: boolean;
+  exportMode: 'jpeg' | 'png' | 'pdf';
 }
 
 export default function BlueprintViewer({
@@ -16,6 +17,7 @@ export default function BlueprintViewer({
   onToggleZipSelection,
   onDownloadPageImage,
   isLoadingFile,
+  exportMode,
 }: BlueprintViewerProps) {
   const [zoomLevel, setZoomLevel] = useState<number>(100);
 
@@ -93,13 +95,13 @@ export default function BlueprintViewer({
               )}
             </button>
 
-            {/* Export single image */}
+            {/* Export single sheet */}
             <button
               onClick={onDownloadPageImage}
-              className="flex items-center gap-1.5 py-1 px-2.5 bg-slate-50 dark:bg-tokyo-input border border-slate-200 dark:border-tokyo-border hover:bg-slate-100 dark:hover:bg-tokyo-card text-slate-600 dark:text-tokyo-text hover:text-blue-600 dark:hover:text-tokyo-blue rounded transition-all cursor-pointer"
-              title="Download page drafting as a standalone JPEG file"
+              className="flex items-center gap-1.5 py-1 px-2.5 bg-slate-50 dark:bg-tokyo-input border border-slate-200 dark:border-tokyo-border hover:bg-slate-100 dark:hover:bg-tokyo-card text-slate-600 dark:text-tokyo-text hover:text-blue-600 dark:hover:text-tokyo-blue rounded transition-all cursor-pointer font-mono text-[11px]"
+              title={`Download sheet as a standalone ${exportMode.toUpperCase()} file`}
             >
-              <Download className="h-4 w-4" /> Download JPEG
+              <Download className="h-4 w-4" /> Download {exportMode.toUpperCase()}
             </button>
           </div>
         )}

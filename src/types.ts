@@ -35,6 +35,7 @@ export interface PDFDrawingFile {
   size: number;
   totalPages: number;
   pages: PdfPageImage[];
+  originalFile?: File;
 }
 
 export interface DrawingChecklistItem {
