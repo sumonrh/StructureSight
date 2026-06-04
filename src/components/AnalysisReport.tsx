@@ -221,6 +221,7 @@ interface AnalysisReportProps {
   selectedPagesCount: number;
   onStartBulkReview: () => void;
   hasUploadedFile: boolean;
+  onStopAI?: () => void;
 }
 
 export default function AnalysisReport({
@@ -236,6 +237,7 @@ export default function AnalysisReport({
   selectedPagesCount,
   onStartBulkReview,
   hasUploadedFile,
+  onStopAI,
 }: AnalysisReportProps) {
 
   // Report metadata form fields
@@ -479,6 +481,15 @@ export default function AnalysisReport({
                   : 'Executing design audits, extracting tabular details, assessing load paths, and identifying potential code violations under ACI & AISC standards.'}
               </p>
             </div>
+            {onStopAI && (
+              <button
+                type="button"
+                onClick={onStopAI}
+                className="mt-1 bg-red-50 dark:bg-tokyo-red/10 hover:bg-red-100 dark:hover:bg-tokyo-red/20 text-red-650 dark:text-tokyo-red border border-red-200 dark:border-tokyo-red/30 py-1.5 px-3 rounded text-[11px] font-semibold transition-colors cursor-pointer font-mono uppercase tracking-wide"
+              >
+                Stop AI Review
+              </button>
+            )}
           </div>
         ) : currentResult ? (
           <div className="space-y-4">

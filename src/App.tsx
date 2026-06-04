@@ -101,6 +101,18 @@ export default function App() {
   // Custom prompting state
   const [customPrompt, setCustomPrompt] = useState<string>('');
 
+  const abortControllerRef = useRef<AbortController | null>(null);
+
+  const stopActiveAiOperation = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    setIsAnalyzing(false);
+    setIsBulkReviewing(false);
+    setIsGeneratingChecklist(false);
+  };
+
   const [leftPanelWidth, setLeftPanelWidth] = useState<number>(384);
   const [rightPanelWidth, setRightPanelWidth] = useState<number>(420);
   const [isLeftCollapsed, setIsLeftCollapsed] = useState<boolean>(false);
@@ -317,6 +329,9 @@ export default function App() {
       setIsGeneratingChecklist(true);
       setApiError(null);
 
+      const controller = new AbortController();
+      abortControllerRef.current = controller;
+
       let securedApiKey = aiConfig.customKey || '';
       if (securedApiKey && publicKey) {
         try {
@@ -337,6 +352,7 @@ export default function App() {
         headers: {
           'Content-Type': 'application/json',
         },
+        signal: controller.signal,
         body: JSON.stringify({
           provider: aiConfig.provider,
           apiKey: securedApiKey,
@@ -358,12 +374,17 @@ export default function App() {
       }
 
     } catch (err: any) {
+      if (err.name === 'AbortError') {
+        setChecklistStatusMessage("Checklist generation stopped by user.");
+        return;
+      }
       console.warn("AI checklist generation failed, running fallback heuristic checklist generator:", err);
       const fallbackList = generateFallbackChecklist(requirementsText);
       setChecklist(fallbackList);
       setApiError('Notice: Checklist generated using client-side design rules (' + (err.message || 'API connection issue') + ')');
     } finally {
       setIsGeneratingChecklist(false);
+      abortControllerRef.current = null;
     }
   };
 
@@ -421,6 +442,9 @@ export default function App() {
     const activePrompt = specificPrompt || customPrompt;
 
     try {
+      const controller = new AbortController();
+      abortControllerRef.current = controller;
+
       let securedApiKey = aiConfig.customKey || '';
       if (securedApiKey && publicKey) {
         try {
@@ -447,6 +471,7 @@ export default function App() {
         headers: {
           'Content-Type': 'application/json',
         },
+        signal: controller.signal,
         body: JSON.stringify({
           image: activePage.base64,
           provider: aiConfig.provider,
@@ -480,10 +505,15 @@ export default function App() {
       }));
 
     } catch (err: any) {
+      if (err.name === 'AbortError') {
+        setApiError('AI design review aborted by user.');
+        return;
+      }
       console.error(err);
       setApiError(err.message || 'The structural analysis request could not be completed.');
     } finally {
       setIsAnalyzing(false);
+      abortControllerRef.current = null;
     }
   };
 
@@ -495,6 +525,9 @@ export default function App() {
     setBulkProgress({ current: 0, total: pagesToReview.length });
 
     try {
+      const controller = new AbortController();
+      abortControllerRef.current = controller;
+
       let securedApiKey = aiConfig.customKey || '';
       if (securedApiKey && publicKey) {
         try {
@@ -532,6 +565,7 @@ export default function App() {
           headers: {
             'Content-Type': 'application/json',
           },
+          signal: controller.signal,
           body: JSON.stringify({
             image: activePage.base64,
             provider: aiConfig.provider,
@@ -565,11 +599,16 @@ export default function App() {
       }
 
     } catch (err: any) {
+      if (err.name === 'AbortError') {
+        setApiError('Bulk AI review aborted by user.');
+        return;
+      }
       console.error(err);
       setApiError(err.message || 'The bulk structural analysis request could not be completed.');
     } finally {
       setIsBulkReviewing(false);
       setBulkProgress(null);
+      abortControllerRef.current = null;
     }
   };
 
@@ -1096,6 +1135,7 @@ export default function App() {
             requirementsFileName={uploadedRequirements ? uploadedRequirements.name : ''}
             statusMessage={checklistStatusMessage}
             onGenerate={handleGenerateChecklistClick}
+            onStopAI={stopActiveAiOperation}
           />
           </div>
         </section>
@@ -1216,6 +1256,7 @@ export default function App() {
               selectedPagesCount={zipSelectedPages.size}
               onStartBulkReview={startBulkReview}
               hasUploadedFile={!!uploadedFile}
+              onStopAI={stopActiveAiOperation}
             />
           </div>
 

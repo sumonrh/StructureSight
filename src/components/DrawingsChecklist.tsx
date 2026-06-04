@@ -11,6 +11,7 @@ interface DrawingsChecklistProps {
   hasUploadedRequirements: boolean;
   requirementsFileName?: string;
   statusMessage?: string | null;
+  onStopAI?: () => void;
 }
 
 export default function DrawingsChecklist({
@@ -22,6 +23,7 @@ export default function DrawingsChecklist({
   hasUploadedRequirements,
   requirementsFileName,
   statusMessage,
+  onStopAI,
 }: DrawingsChecklistProps) {
   const categories = {
     safety: '1. Integrity & Safety',
@@ -87,6 +89,15 @@ export default function DrawingsChecklist({
           <div className="flex flex-col items-center justify-center py-6 text-center space-y-2">
             <div className="h-6 w-6 border-2 border-slate-200 dark:border-tokyo-border border-t-blue-600 dark:border-tokyo-blue rounded-full animate-spin" />
             <p className="text-[11px] font-mono text-slate-400 dark:text-tokyo-muted uppercase tracking-widest animate-pulse">Generating checklist...</p>
+            {onStopAI && (
+              <button
+                type="button"
+                onClick={onStopAI}
+                className="mt-1 text-[10px] text-red-500 dark:text-tokyo-red hover:underline font-semibold cursor-pointer"
+              >
+                Cancel
+              </button>
+            )}
           </div>
         ) : items.length === 0 ? (
           <div className="text-center py-6 px-4 bg-slate-50/50 dark:bg-tokyo-input/20 border border-dashed border-slate-200 dark:border-tokyo-border rounded-lg">

@@ -33,8 +33,8 @@ export default function EngineeringChat({
   const [input, setInput] = useState<string>('');
   const [isSending, setIsSending] = useState<boolean>(false);
   const [chatError, setChatError] = useState<string | null>(null);
-
   const scrollRef = useRef<HTMLDivElement>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   // Auto-scroll on new messages
   useEffect(() => {
@@ -65,6 +65,9 @@ export default function EngineeringChat({
     setIsSending(true);
 
     try {
+      const controller = new AbortController();
+      abortControllerRef.current = controller;
+
       let securedApiKey = aiConfig.customKey || '';
       if (securedApiKey && publicKey) {
         try {
@@ -112,6 +115,7 @@ export default function EngineeringChat({
         headers: {
           'Content-Type': 'application/json',
         },
+        signal: controller.signal,
         body: JSON.stringify({
           image: pageImage?.base64 || null,
           provider: aiConfig.provider,
@@ -140,10 +144,15 @@ export default function EngineeringChat({
       setMessages(prev => [...prev, assistantMsg]);
 
     } catch (err: any) {
-      console.error(err);
-      setChatError(err.message || 'Connecting with the structural review model failed.');
+      if (err.name === 'AbortError') {
+        setChatError('Chat response generation stopped by user.');
+      } else {
+        console.error(err);
+        setChatError(err.message || 'Connecting with the structural review model failed.');
+      }
     } finally {
       setIsSending(false);
+      abortControllerRef.current = null;
     }
   };
 
@@ -257,13 +266,22 @@ export default function EngineeringChat({
 
             {/* AI thinking state */}
             {isSending && (
-              <div className="flex gap-3 max-w-[80%]">
-                <div className="h-7 w-7 rounded-sm bg-blue-50 dark:bg-tokyo-blue/10 border border-blue-200 dark:border-tokyo-border text-blue-600 dark:text-tokyo-blue flex items-center justify-center shrink-0 animate-spin">
-                  <Sparkles className="h-3.5 w-3.5" />
+              <div className="flex flex-col gap-1.5 max-w-[80%]">
+                <div className="flex gap-3">
+                  <div className="h-7 w-7 rounded-sm bg-blue-50 dark:bg-tokyo-blue/10 border border-blue-200 dark:border-tokyo-border text-blue-600 dark:text-tokyo-blue flex items-center justify-center shrink-0 animate-spin">
+                    <Sparkles className="h-3.5 w-3.5" />
+                  </div>
+                  <div className="bg-slate-100 dark:bg-tokyo-input border border-slate-200 dark:border-tokyo-border rounded-lg px-4 py-3 text-xs text-slate-550 dark:text-tokyo-muted font-mono italic animate-pulse flex items-center gap-2">
+                    <span>Independent Design Reviewer is analyzing...</span>
+                  </div>
                 </div>
-                <div className="bg-slate-100 dark:bg-tokyo-input border border-slate-200 dark:border-tokyo-border rounded-lg px-4 py-3 text-xs text-slate-500 dark:text-tokyo-muted font-mono italic animate-pulse flex items-center gap-2">
-                  <span>Independent Design Reviewer is analyzing...</span>
-                </div>
+                <button
+                  type="button"
+                  onClick={() => abortControllerRef.current?.abort()}
+                  className="ml-10 self-start text-[10px] text-red-500 dark:text-tokyo-red hover:underline font-semibold cursor-pointer"
+                >
+                  Stop Thinking
+                </button>
               </div>
             )}
 
