@@ -44,5 +44,26 @@
   background-size: 24px 24px;
 }
 
+/* Sidebar sizing */
+.resizable-sidebar {
+  width: 100%;
+}
+.resizable-sidebar.collapsed {
+  width: 0 !important;
+}
+@media (min-width: 1280px) {
+  .resizable-sidebar:not(.collapsed) {
+    width: var(--left-panel-width, 384px) !important;
+  }
+}
 
+/* Report sizing */
+.resizable-report {
+  width: 100%;
+}
+@media (min-width: 1280px) {
+  .resizable-report {
+    width: var(--right-panel-width, 420px) !important;
+  }
+}
 

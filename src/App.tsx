@@ -13,6 +13,8 @@ import {
   ShieldAlert,
   ShieldCheck,
   ChevronRight,
+  ChevronLeft,
+  Menu,
   Info,
   Calendar,
   User,
@@ -97,6 +99,52 @@ export default function App() {
 
   // Custom prompting state
   const [customPrompt, setCustomPrompt] = useState<string>('');
+
+  const [leftPanelWidth, setLeftPanelWidth] = useState<number>(384);
+  const [rightPanelWidth, setRightPanelWidth] = useState<number>(420);
+  const [isLeftCollapsed, setIsLeftCollapsed] = useState<boolean>(false);
+
+  const startResizingLeft = (mouseDownEvent: React.MouseEvent) => {
+    mouseDownEvent.preventDefault();
+    const startWidth = leftPanelWidth;
+    const startX = mouseDownEvent.clientX;
+
+    const doDrag = (mouseMoveEvent: MouseEvent) => {
+      const newWidth = startWidth + (mouseMoveEvent.clientX - startX);
+      if (newWidth > 220 && newWidth < 600) {
+        setLeftPanelWidth(newWidth);
+      }
+    };
+
+    const stopDrag = () => {
+      document.removeEventListener('mousemove', doDrag);
+      document.removeEventListener('mouseup', stopDrag);
+    };
+
+    document.addEventListener('mousemove', doDrag);
+    document.addEventListener('mouseup', stopDrag);
+  };
+
+  const startResizingRight = (mouseDownEvent: React.MouseEvent) => {
+    mouseDownEvent.preventDefault();
+    const startWidth = rightPanelWidth;
+    const startX = mouseDownEvent.clientX;
+
+    const doDrag = (mouseMoveEvent: MouseEvent) => {
+      const newWidth = startWidth - (mouseMoveEvent.clientX - startX);
+      if (newWidth > 280 && newWidth < 700) {
+        setRightPanelWidth(newWidth);
+      }
+    };
+
+    const stopDrag = () => {
+      document.removeEventListener('mousemove', doDrag);
+      document.removeEventListener('mouseup', stopDrag);
+    };
+
+    document.addEventListener('mousemove', doDrag);
+    document.addEventListener('mouseup', stopDrag);
+  };
 
   const [publicKey, setPublicKey] = useState<string>('');
 
@@ -656,6 +704,13 @@ export default function App() {
       {/* Precision Drafting Header */}
       <header className="h-14 bg-slate-900 dark:bg-tokyo-card text-white flex items-center justify-between px-6 border-b border-slate-700 dark:border-tokyo-border flex-shrink-0 transition-colors duration-150">
         <div className="flex items-center gap-3">
+          <button
+            onClick={() => setIsLeftCollapsed(!isLeftCollapsed)}
+            className="p-1.5 rounded bg-slate-850 dark:bg-tokyo-input text-slate-300 dark:text-tokyo-muted hover:text-white dark:hover:text-tokyo-text border border-slate-700 dark:border-tokyo-border hover:bg-slate-700 transition-colors cursor-pointer flex items-center justify-center mr-1"
+            title={isLeftCollapsed ? "Show Control Sidebar" : "Hide Control Sidebar"}
+          >
+            <Menu className="h-4 w-4" />
+          </button>
           <div className="w-8 h-8 bg-blue-500 dark:bg-tokyo-blue rounded flex items-center justify-center font-bold text-lg text-white">S</div>
           <h1 className="text-xl font-semibold tracking-tight">StructureSight</h1>
           <span className="ml-4 text-xs font-mono text-slate-400 dark:text-tokyo-muted border border-slate-700 dark:border-tokyo-border px-2 py-0.5 rounded">v1.2.0-PRO</span>
@@ -695,7 +750,13 @@ export default function App() {
       <main className="flex-1 flex flex-col xl:flex-row overflow-hidden">
         
         {/* Left Drawer / Side Panel Controls */}
-        <section className="w-full xl:w-96 border-b xl:border-b-0 xl:border-r border-slate-200 dark:border-tokyo-border bg-white dark:bg-tokyo-panel p-5 overflow-y-auto space-y-5 shrink-0 select-none text-slate-700 dark:text-tokyo-text transition-colors duration-150">
+        <section
+          style={{ '--left-panel-width': `${isLeftCollapsed ? 0 : leftPanelWidth}px` } as React.CSSProperties}
+          className={`relative border-b xl:border-b-0 xl:border-r border-slate-200 dark:border-tokyo-border bg-white dark:bg-tokyo-panel shrink-0 select-none text-slate-700 dark:text-tokyo-text transition-colors duration-150 overflow-hidden resizable-sidebar ${
+            isLeftCollapsed ? 'collapsed p-0 border-r-0' : 'p-5 overflow-y-auto'
+          }`}
+        >
+          <div style={{ minWidth: 344 }} className={isLeftCollapsed ? 'hidden' : 'space-y-5'}>
           
           {/* Document Ingestion Sandbox */}
           <div className="space-y-3">
@@ -1016,13 +1077,25 @@ export default function App() {
             onReset={handleChecklistReset}
             isLoading={isGeneratingChecklist}
           />
+          </div>
         </section>
 
+        {/* Left Resizer Drag Handle */}
+        {!isLeftCollapsed && (
+          <div 
+            onMouseDown={startResizingLeft}
+            className="hidden xl:flex w-1.5 hover:w-2 bg-slate-200 dark:bg-tokyo-border hover:bg-blue-500 dark:hover:bg-tokyo-blue transition-all cursor-col-resize justify-center items-center select-none shrink-0"
+            title="Drag to resize sidebar"
+          >
+            <div className="w-0.5 h-8 bg-slate-400 dark:bg-tokyo-muted rounded-full"></div>
+          </div>
+        )}
+
         {/* Center / Right Drafting Floor Workspace */}
-        <section className="flex-1 bg-slate-100 dark:bg-tokyo-bg p-6 overflow-y-auto flex flex-col lg:grid lg:grid-cols-3 gap-6 min-h-0 transition-colors duration-150">
+        <section className="flex-1 bg-slate-100 dark:bg-tokyo-bg p-6 overflow-y-auto flex flex-col xl:flex-row gap-6 min-h-0 transition-colors duration-150">
           
           {/* Column A & B: HD Page drawing stage viewer & Chat co-pilot (stacked) */}
-          <div className="flex flex-col space-y-6 lg:col-span-2">
+          <div className="flex-1 flex flex-col space-y-6 min-w-0">
             
             {/* API Exception Error Notice Bar */}
             {apiError && (
@@ -1096,8 +1169,20 @@ export default function App() {
             />
           </div>
 
+          {/* Right Resizer Drag Handle */}
+          <div 
+            onMouseDown={startResizingRight}
+            className="hidden xl:flex w-1.5 hover:w-2 bg-slate-200 dark:bg-tokyo-border hover:bg-blue-500 dark:hover:bg-tokyo-blue transition-all cursor-col-resize justify-center items-center select-none shrink-0"
+            title="Drag to resize report"
+          >
+            <div className="w-0.5 h-8 bg-slate-400 dark:bg-tokyo-muted rounded-full"></div>
+          </div>
+
           {/* Column C: Independent Design Check */}
-          <div className="flex flex-col lg:col-span-1">
+          <div 
+            style={{ '--right-panel-width': `${rightPanelWidth}px` } as React.CSSProperties}
+            className="w-full xl:shrink-0 flex flex-col min-w-[280px] resizable-report"
+          >
             <AnalysisReport
               currentResult={currentActiveResult}
               isLoading={isAnalyzing}
